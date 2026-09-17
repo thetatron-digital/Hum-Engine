@@ -67,6 +67,10 @@ export const PATTERNS: PatternDef[] = [
     steps: bar(X,0,0,0, 0,0,0,0, m,0,0,0, 0,0,0,0) },
   { id: 'kick-sparse', label: 'One hit', role: 'kick', genre: 'cinematic', tooltip: 'A single kick at the top of the bar. Maximum space.',
     steps: bar(X,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0) },
+  { id: 'kick-shuffle', label: 'Shuffling', role: 'kick', genre: 'french', tooltip: 'Loose and dragging rather than square. The Da Funk feel.',
+    steps: bar(X,0,0,0, 0,0,m,0, X,0,0,m, 0,0,0,0) },
+  { id: 'kick-electro', label: 'Electro', role: 'kick', genre: 'acid', tooltip: 'Syncopated and stiff. More robot than disco.',
+    steps: bar(X,0,0,0, 0,0,X,0, 0,0,0,X, 0,0,m,0) },
 
   // ---- Snare / clap -----------------------------------------------------
   { id: 'snare-backbeat', label: 'Backbeat', role: 'snare', genre: 'french', tooltip: 'Claps on beats two and four. The standard.',
@@ -79,6 +83,10 @@ export const PATTERNS: PatternDef[] = [
     steps: bar(0,0,0,0, X,0,g,0, 0,0,X,0, 0,X,0,g) },
   { id: 'snare-rim', label: 'Rim ticks', role: 'snare', genre: 'cinematic', tooltip: 'Dry ticks rather than a full snare. Sits under dialogue.',
     steps: bar(0,0,0,0, 0,0,m,0, 0,0,0,0, 0,0,m,0) },
+  { id: 'snare-shuffle', label: 'Shuffling', role: 'snare', genre: 'french', tooltip: 'Backbeat with a dragging pickup, like a live drummer behind the beat.',
+    steps: bar(0,0,0,g, X,0,0,0, 0,g,0,0, X,0,m,0) },
+  { id: 'snare-half', label: 'Half time', role: 'snare', genre: 'dnb', tooltip: 'One clap in the middle of the bar. Makes everything feel twice as slow.',
+    steps: bar(0,0,0,0, 0,0,0,0, X,0,0,0, 0,0,0,0) },
   { id: 'snare-none', label: 'Silent', role: 'snare', genre: 'cinematic', tooltip: 'No snare at all. Use density to bring hits back in.',
     steps: bar(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0) },
 
@@ -107,6 +115,10 @@ export const PATTERNS: PatternDef[] = [
     steps: bar(0,0,X,m, 0,0,X,m, 0,0,X,m, 0,0,X,m) },
   { id: 'bass-sub-long', label: 'Long sub', role: 'bass', genre: 'dnb', tooltip: 'One or two very long low notes per bar.',
     steps: bar(X,0,0,0, 0,0,0,0, 0,0,X,0, 0,0,0,0) },
+  { id: 'bass-stab', label: 'Stabs', role: 'bass', genre: 'french', tooltip: 'Short jabs with gaps. Leaves room for the kick to land.',
+    steps: bar(X,0,0,0, 0,0,X,0, 0,X,0,0, 0,0,X,0) },
+  { id: 'bass-sixteenths', label: 'Sixteenths', role: 'bass', genre: 'trance', tooltip: 'Relentless and even. Pure forward motion.',
+    steps: bar(X,m,m,m, X,m,m,m, X,m,m,m, X,m,m,m) },
   { id: 'bass-drone', label: 'Drone', role: 'bass', genre: 'cinematic', tooltip: 'A single held low note. Pure weight, no rhythm.',
     steps: bar(X,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0) },
 
@@ -133,6 +145,10 @@ export const PATTERNS: PatternDef[] = [
     steps: bar(X,0,0,m, 0,X,0,0, m,0,X,0, 0,0,m,0) },
   { id: 'lead-scream', label: 'Scream', role: 'lead', genre: 'acid', tooltip: 'Long sustained notes built for the Tear voice to howl on.',
     steps: bar(X,0,0,0, 0,0,0,0, X,0,0,0, 0,0,0,0) },
+  { id: 'lead-riff', label: 'Riff', role: 'lead', genre: 'french', tooltip: 'A rolling eighth note figure with a gap to breathe. Built for a hook.',
+    steps: bar(X,0,m,0, X,0,m,0, X,0,m,0, 0,0,0,0) },
+  { id: 'lead-stabs', label: 'Stabs', role: 'lead', genre: 'acid', tooltip: 'Hard jabs on and off the beat. Very Robot Rock.',
+    steps: bar(X,0,0,X, 0,0,X,0, X,0,0,X, 0,X,0,0) },
   { id: 'lead-sparse', label: 'Sparse', role: 'lead', genre: 'cinematic', tooltip: 'One line every two bars. Melody as punctuation.',
     steps: bar(0,0,0,0, X,0,0,0, 0,0,0,0, 0,0,0,0) },
 

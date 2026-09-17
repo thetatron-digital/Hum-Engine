@@ -171,10 +171,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     const state = get();
     const bars = state.song.shift.transitionBars;
     const current = currentShiftBlend(state.shift, state.position);
+    // A transition needs musical time to happen in. Stopped, there is none:
+    // the position never advances, so a ramp would sit at its starting value
+    // forever and the button would appear to do nothing. So when stopped it
+    // simply lands, and you hear the result when you press play.
+    const landed = !state.playing;
     set({
       shift: {
         mode,
-        from: current,
+        from: landed ? 1 : current,
         to: 1,
         startStep: state.position,
         steps: Math.max(1, bars * 16),
@@ -192,7 +197,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       shift: {
         mode: state.shift.mode,
-        from: currentShiftBlend(state.shift, state.position),
+        from: state.playing ? currentShiftBlend(state.shift, state.position) : 0,
         to: 0,
         startStep: state.position,
         steps: Math.max(1, bars * 16),

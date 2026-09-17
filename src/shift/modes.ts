@@ -68,6 +68,7 @@ const orchestral: ShiftModeDef = {
     setTrack(song, 'pad', { enabled: true, voice: 'pad-strings', reverbSend: 0.65, volume: Math.min(1, song.tracks.pad.volume + 0.2), pumpAmount: 0.1 });
     setTrack(song, 'chop', { enabled: false });
     song.master.pump = 0.08;
+    song.master.crush = 0;
     song.master.drive = toward(song.master.drive, 0.05, 0.8);
     song.master.reverbSize = toward(song.master.reverbSize, 0.8, 0.8);
     // Starts fairly closed so the blend reads as a filter opening over the
@@ -97,6 +98,7 @@ const ambient: ShiftModeDef = {
     });
     setTrack(song, 'chop', { enabled: false });
     song.master.pump = 0;
+    song.master.crush = 0;
     song.master.reverbSize = 0.95;
     song.master.delayFeedback = Math.max(song.master.delayFeedback, 0.55);
     song.master.lowpass = 0.7;
@@ -205,6 +207,7 @@ export function blendSongs(from: Song, to: Song, t: number): Song {
     lowpass: lerp(from.master.lowpass, to.master.lowpass, t),
     highpass: lerp(from.master.highpass, to.master.highpass, t),
     drive: lerp(from.master.drive, to.master.drive, t),
+    crush: lerp(from.master.crush, to.master.crush, t),
     reverbSize: lerp(from.master.reverbSize, to.master.reverbSize, t),
     delayTime: discrete.master.delayTime,
     delayFeedback: lerp(from.master.delayFeedback, to.master.delayFeedback, t),
@@ -226,6 +229,7 @@ export function blendSongs(from: Song, to: Song, t: number): Song {
     target.pumpAmount = lerp(a.pumpAmount, b.pumpAmount, t);
     target.syncAmount = lerp(a.syncAmount, b.syncAmount, t);
     target.motion = lerp(a.motion, b.motion, t);
+    target.phase = lerp(a.phase, b.phase, t);
 
     // A track that is on at one end and off at the other fades rather than
     // disappearing, so nothing pops out of the mix mid-transition.

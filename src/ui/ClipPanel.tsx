@@ -8,6 +8,14 @@ import { useAppStore } from '../state/store';
 import { registerBuffer } from '../audio/samples';
 import { getEngine } from '../audio/engine';
 import { renderVocals, vocalReady } from '../vocal/render';
+import { MicrophoneDenied } from '../hum/capture';
+import {
+  VoiceRecorder,
+  MAX_RECORD_SECONDS,
+  storeVoice,
+  storedVoiceTake,
+  clearStoredVoice,
+} from '../vocal/record';
 import { Knob } from './Knob';
 import { ToggleButton } from './Controls';
 import { InfoLabel } from './Tooltip';
@@ -44,21 +52,55 @@ export function VocalControls() {
     <div className="sub-panel">
       <InfoLabel
         text="Robot voice"
-        tip="Type a phrase and the chords sing it. The words come from a voice built out of nothing, and the pitch comes from whatever chord is playing."
+        tip="The words come from you or from a voice built out of nothing, and the pitch comes from whatever chord is playing. That is what makes the chords appear to sing."
         className="panel-title"
       />
 
-      <label className="name-field">
-        <span>Phrase</span>
-        <input
-          value={vocal.text}
-          onChange={(event) => setParam('vocal.text', event.target.value)}
-          placeholder="type something for it to say"
-        />
-      </label>
+      <div className="bars-row">
+        <InfoLabel text="Where the words come from" tip="A recording of your own voice is much clearer and far closer to the records. Typed words are unmistakably a machine, which is sometimes exactly what you want." />
+        <div className="bars-buttons">
+          <ToggleButton on={vocal.source === 'text'} onClick={() => setParam('vocal.source', 'text')}>
+            Typed words
+          </ToggleButton>
+          <ToggleButton on={vocal.source === 'voice'} onClick={() => setParam('vocal.source', 'voice')}>
+            My voice
+          </ToggleButton>
+        </div>
+      </div>
+
+      <div className="bars-row">
+        <InfoLabel text="Which robot" tip="A vocoder splits your voice into a row of frequency bands and is the choral, harmonised robot. A talkbox pipes the synth through a mouth instead, giving two or three moving resonances and a much more nasal, human sound." />
+        <div className="bars-buttons">
+          <ToggleButton on={vocal.mode === 'vocoder'} onClick={() => setParam('vocal.mode', 'vocoder')}>
+            Vocoder
+          </ToggleButton>
+          <ToggleButton on={vocal.mode === 'talkbox'} onClick={() => setParam('vocal.mode', 'talkbox')}>
+            Talkbox
+          </ToggleButton>
+        </div>
+      </div>
+
+      {vocal.source === 'text' ? (
+        <label className="name-field">
+          <span>Phrase</span>
+          <input
+            value={vocal.text}
+            onChange={(event) => setParam('vocal.text', event.target.value)}
+            placeholder="type something for it to say"
+          />
+        </label>
+      ) : (
+        <VoiceTake onRecorded={() => setReady(false)} />
+      )}
 
       <p className="hint">
-        {building ? 'Building the voice.' : ready ? 'Ready. Turn the Vocal track on to hear it.' : 'Waiting for a phrase.'}
+        {building
+          ? 'Building the voice.'
+          : ready
+            ? 'Ready. Turn the Vocal track on to hear it.'
+            : vocal.source === 'voice'
+              ? 'Record something for it to sing.'
+              : 'Waiting for a phrase.'}
       </p>
 
       <div className="knob-row">
@@ -67,6 +109,129 @@ export function VocalControls() {
         <Knob label="Size" tip="Shifts the voice's character. Right sounds like a small robot, left sounds like an enormous one." value={vocal.formantShift} min={0.6} max={1.7} defaultValue={1} onChange={(value) => setParam('vocal.formantShift', value)} format={(value) => (value > 1.05 ? 'Smaller' : value < 0.95 ? 'Bigger' : 'Normal')} />
         <Knob label="Breath" tip="Lets some of the raw breath through, which brings back the s and t sounds. Too much and it hisses." value={vocal.sibilance} defaultValue={0.25} onChange={(value) => setParam('vocal.sibilance', value)} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Recording a phrase to put through the vocoder.
+ *
+ * Plain press to start and press to stop, with no count-in. Unlike humming a
+ * melody, the timing of what you say does not have to line up with the beat:
+ * the phrase gets retriggered in time by the track's pattern, so all that
+ * matters is that the words are clear.
+ */
+function VoiceTake({ onRecorded }: { onRecorded: () => void }) {
+  const setParam = useAppStore((state) => state.setParam);
+  const savedName = useAppStore((state) => state.song.vocal.recordingName);
+  const [state, setState] = useState<'idle' | 'opening' | 'recording' | 'done' | 'error'>(
+    () => (storedVoiceTake() ? 'done' : 'idle'),
+  );
+  const [message, setMessage] = useState('');
+  const [level, setLevel] = useState(0);
+  const [seconds, setSeconds] = useState(0);
+  const recorder = useRef<VoiceRecorder | null>(null);
+  const ticker = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  const shutDown = () => {
+    clearInterval(ticker.current);
+    recorder.current?.close();
+    recorder.current = null;
+    setLevel(0);
+  };
+
+  useEffect(() => shutDown, []);
+
+  const begin = async () => {
+    setState('opening');
+    setMessage('');
+    try {
+      const active = await VoiceRecorder.open();
+      recorder.current = active;
+      active.onLevel = setLevel;
+      active.onFull = () => finish();
+      active.start();
+      setState('recording');
+      ticker.current = setInterval(() => setSeconds(active.seconds), 100);
+    } catch (error) {
+      setState('error');
+      setMessage(
+        error instanceof MicrophoneDenied
+          ? error.message
+          : `The microphone could not be opened. ${error instanceof Error ? error.name : ''}`,
+      );
+    }
+  };
+
+  const finish = () => {
+    const active = recorder.current;
+    if (!active) return;
+    active.stop();
+    const take = active.take();
+    clearInterval(ticker.current);
+    if (!take) {
+      shutDown();
+      setState('error');
+      setMessage('Nothing was picked up. Speak closer to the microphone and try again.');
+      return;
+    }
+    const name = `Take of ${take.length / active.sampleRate < 1 ? 'under a second' : `${(take.length / active.sampleRate).toFixed(1)} seconds`}`;
+    storeVoice(take, active.sampleRate, name);
+    shutDown();
+    setParam('vocal.recordingName', name);
+    setState('done');
+    onRecorded();
+  };
+
+  return (
+    <div className="take">
+      <p className="warn-box">
+        Use headphones. You will not hear yourself while recording, but a speaker playing the beat
+        into the microphone ends up inside the words.
+      </p>
+
+      {state === 'recording' ? (
+        <>
+          <div className="recording">
+            <div className="record-dot" />
+            <p>Say your phrase. {Math.max(0, MAX_RECORD_SECONDS - seconds).toFixed(0)} seconds left.</p>
+            <div className="level-meter">
+              <div className="level-fill" style={{ width: `${Math.min(100, level * 220)}%` }} />
+            </div>
+          </div>
+          <button type="button" className="record-button" onClick={finish}>
+            Done
+          </button>
+        </>
+      ) : (
+        <button type="button" className="record-button" onClick={() => void begin()} disabled={state === 'opening'}>
+          {state === 'opening' ? 'Asking for the microphone' : state === 'done' ? 'Record it again' : 'Record my voice'}
+        </button>
+      )}
+
+      {state === 'done' && (
+        <div className="button-row">
+          <button
+            type="button"
+            className="wide-button"
+            onClick={() => {
+              clearStoredVoice();
+              setParam('vocal.recordingName', '');
+              setState('idle');
+            }}
+          >
+            Throw it away
+          </button>
+        </div>
+      )}
+
+      {message && <p className="warn-box">{message}</p>}
+      {state !== 'done' && savedName && !storedVoiceTake() && (
+        <p className="warn-box">
+          This song was saved with a recording. Recordings are not kept inside the song file, so
+          record your phrase again to hear this track.
+        </p>
+      )}
     </div>
   );
 }

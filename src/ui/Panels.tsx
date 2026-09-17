@@ -4,7 +4,8 @@
 
 import { useRef, useState } from 'react';
 import { useAppStore, currentShiftBlend } from '../state/store';
-import { MOOD_LIST } from '../music/moods';
+import { MOOD_LIST, PALETTES } from '../music/moods';
+import type { PaletteId } from '../music/moods';
 import { PROGRESSIONS } from '../music/progressions';
 import { SHIFT_MODES } from '../shift/modes';
 import type { ShiftModeId } from '../state/song';
@@ -18,6 +19,7 @@ import { InfoLabel } from './Tooltip';
 
 export function HarmonyPanel() {
   const mood = useAppStore((state) => state.song.mood);
+  const palette = useAppStore((state) => state.song.palette);
   const progression = useAppStore((state) => state.song.progression);
   const setParam = useAppStore((state) => state.setParam);
 
@@ -40,6 +42,23 @@ export function HarmonyPanel() {
         ))}
       </div>
       <p className="hint">{MOOD_LIST.find((option) => option.id === mood)?.tooltip}</p>
+
+      <div className="palette-row">
+        <InfoLabel text="How many notes" tip="How much of the scale melodies may use. Five notes is the one that always works: the two notes it leaves out are the ones that sound like a mistake." />
+        <div className="bars-buttons">
+          {PALETTES.map((option) => (
+            <ToggleButton
+              key={option.id}
+              on={palette === option.id}
+              onClick={() => setParam('palette', option.id as PaletteId)}
+            >
+              {option.label}
+            </ToggleButton>
+          ))}
+        </div>
+        <p className="hint">{PALETTES.find((option) => option.id === palette)?.tooltip}</p>
+      </div>
+
       <Picker
         label="Chord movement"
         tip="How the chords travel over a few bars. Pick by listening rather than by name."
@@ -74,6 +93,7 @@ export function MasterPanel() {
       </div>
       <div className="knob-row">
         <Knob label="Drive" tip="Pushes the mix into distortion. A little glues it together, a lot makes it dirty." value={master.drive} defaultValue={0.2} onChange={(value) => set('drive', value)} />
+        <Knob label="Crush" tip="Throws away detail until the whole thing sounds like a broken machine. A little adds grit, a lot is the Human After All sound." value={master.crush} defaultValue={0} onChange={(value) => set('crush', value)} />
         <Knob label="Room size" tip="How big the space around the music sounds. Right is a cathedral." value={master.reverbSize} defaultValue={0.35} onChange={(value) => set('reverbSize', value)} />
         <Knob label="Echo time" tip="How far apart the repeats are, always locked to the tempo so they stay in time." value={master.delayTime} min={0.125} max={2} defaultValue={0.75} onChange={(value) => set('delayTime', value)} format={(value) => `${value.toFixed(2)} beats`} />
         <Knob label="Echo feed" tip="How many times each repeat comes back before it dies away." value={master.delayFeedback} defaultValue={0.3} onChange={(value) => set('delayFeedback', value)} />
@@ -97,6 +117,7 @@ export function ShiftPanel() {
   const startShift = useAppStore((state) => state.startShift);
   const returnFromShift = useAppStore((state) => state.returnFromShift);
 
+  const playing = useAppStore((state) => state.playing);
   const blend = currentShiftBlend(shift, position);
   const away = blend > 0.001;
   const moving = shift ? Math.abs(blend - shift.to) > 0.001 : false;
@@ -137,6 +158,7 @@ export function ShiftPanel() {
       </div>
       <p className="shift-state">
         {moving ? 'Moving' : away ? `Holding in ${mode?.label}` : 'At the original'}
+        {!playing && ' · press Play to hear it, and to make Shift glide rather than land'}
       </p>
 
       <div className="bars-row">

@@ -7,7 +7,7 @@
  * fall out of the same mechanism.
  */
 
-import type { MoodId } from '../music/moods';
+import type { MoodId, PaletteId } from '../music/moods';
 import type { TrackRole } from '../music/patterns';
 
 export const SONG_FORMAT_VERSION = 1;
@@ -93,6 +93,11 @@ export interface Track {
   solo: boolean;
   voice: string;
   pattern: TrackPattern;
+  /**
+   * Which melody shape the line follows. Bass and Lead only: chords and pads
+   * vary by inversion instead.
+   */
+  riff: string;
   /** 0 strips hits out, 0.5 leaves the pattern alone, 1 fills every gap. */
   density: number;
   /** 0 is a perfect loop, 1 rewrites the groove every bar within musical rules. */
@@ -115,6 +120,11 @@ export interface Track {
   syncAmount: number;
   /** Chance per bar that a note jumps an octave. Melodic tracks only. */
   motion: number;
+  /**
+   * Sweeping notch filters that make the sound seem to swirl past you.
+   * Only on the tracks that carry notes, where it belongs.
+   */
+  phase: number;
 }
 
 export interface MasterSettings {
@@ -127,6 +137,8 @@ export interface MasterSettings {
   /** Master high pass sweep. 0 is fully open. */
   highpass: number;
   drive: number;
+  /** Throws away detail until it sounds like a broken machine. */
+  crush: number;
   reverbSize: number;
   /** Delay time as a fraction of a beat, so it always stays in time. */
   delayTime: number;
@@ -173,8 +185,18 @@ export interface CustomShift {
 
 /** Settings for the robot voice on the Vocal track. */
 export interface VocalSettings {
+  /**
+   * Where the words come from. 'text' builds a voice from nothing, which is
+   * unmistakably a machine. 'voice' uses a recording of you, which is far
+   * clearer and much closer to the records.
+   */
+  source: 'text' | 'voice';
+  /** A vocoder is the choral robot. A talkbox is the nasal, vowel-heavy one. */
+  mode: 'vocoder' | 'talkbox';
   /** The phrase the machine says. */
   text: string;
+  /** What you called the recording, kept so a loaded song can tell you. */
+  recordingName: string;
   /** More bands means clearer words, fewer means a cruder, thicker robot. */
   bands: number;
   /** How bright the chord underneath the voice is. */
@@ -212,6 +234,8 @@ export interface Song {
    */
   timeFeel: number;
   mood: MoodId;
+  /** How many notes melodies are allowed to use. Five is the safe default. */
+  palette: PaletteId;
   progression: string;
   master: MasterSettings;
   tracks: Record<TrackId, Track>;
@@ -240,6 +264,7 @@ function makeTrack(id: TrackId, overrides: Partial<Track> = {}): Track {
     solo: false,
     voice: '',
     pattern: { source: 'library', libraryId: '', steps: new Array(16).fill(0), notes: [] },
+    riff: 'root',
     density: 0.5,
     chaos: 0,
     cutoff: 0.8,
@@ -253,6 +278,7 @@ function makeTrack(id: TrackId, overrides: Partial<Track> = {}): Track {
     pumpAmount: 0,
     syncAmount: 0.3,
     motion: 0,
+    phase: 0,
     ...overrides,
   };
 }
@@ -270,10 +296,16 @@ export function createDefaultSong(): Song {
     swing: 0,
     timeFeel: 1,
     mood: 'euphoric',
+    palette: 'pentatonic',
     progression: 'circle',
     vocal: {
+      source: 'text',
+      mode: 'vocoder',
+      recordingName: '',
       text: 'we are the robots',
-      bands: 20,
+      // Ten is what the Roland SVC-350 had, which is the vocoder on most of
+      // the records this is chasing.
+      bands: 10,
       brightness: 0.8,
       formantShift: 1,
       sibilance: 0.25,
@@ -290,6 +322,7 @@ export function createDefaultSong(): Song {
       lowpass: 1,
       highpass: 0,
       drive: 0.2,
+      crush: 0,
       reverbSize: 0.35,
       delayTime: 0.75,
       delayFeedback: 0.3,
@@ -319,6 +352,7 @@ export function createDefaultSong(): Song {
       bass: makeTrack('bass', {
         voice: 'bass-mono',
         pattern: { source: 'library', libraryId: 'bass-offbeat', steps: [], notes: [] },
+        riff: 'root-five',
         cutoff: 0.45, resonance: 0.25, envAmount: 0.45,
         octave: -1, volume: 0.85, pumpAmount: 1, reverbSend: 0,
       }),
@@ -331,6 +365,7 @@ export function createDefaultSong(): Song {
       lead: makeTrack('lead', {
         voice: 'lead-supersaw',
         pattern: { source: 'library', libraryId: 'lead-hook', steps: [], notes: [] },
+        riff: 'hook',
         enabled: false,
         cutoff: 0.7, resonance: 0.25, envAmount: 0.4,
         volume: 0.55, pumpAmount: 0.6, reverbSend: 0.3, delaySend: 0.3, motion: 0.2,

@@ -7,8 +7,10 @@
  * Shift presses and knob moves played back exactly as you did them.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import * as Tone from 'tone';
 import { useAppStore, renderSong, exportSongJson } from '../state/store';
+import { migrateSong } from '../state/song';
 import { getEngine } from '../audio/engine';
 import { renderToBuffers, SilentRenderError } from '../export/render';
 import { makePerformancePlayer, performanceBars } from '../export/performance';
@@ -23,6 +25,7 @@ export function ExportPanel() {
   const recording = useAppStore((state) => state.recording);
   const performance = useAppStore((state) => state.performance);
   const recordBaseSong = useAppStore((state) => state.recordBaseSong);
+  const setSong = useAppStore((state) => state.setSong);
   const startRecording = useAppStore((state) => state.startRecording);
   const stopRecording = useAppStore((state) => state.stopRecording);
   const clearPerformance = useAppStore((state) => state.clearPerformance);
@@ -31,6 +34,7 @@ export function ExportPanel() {
   const [usePerformance, setUsePerformance] = useState(false);
   const [busy, setBusy] = useState('');
   const [status, setStatus] = useState('');
+  const songInput = useRef<HTMLInputElement>(null);
 
   const capturedBars = performanceBars(performance);
   const hasPerformance = Boolean(recordBaseSong) && performance.length > 0;
@@ -38,6 +42,23 @@ export function ExportPanel() {
   const run = async (withStems: boolean) => {
     setBusy(withStems ? 'Rendering the mix and every track' : 'Rendering the mix');
     setStatus('');
+
+    // Playback has to stop for the duration of the render.
+    //
+    // Rendering swaps the audio engine's context for an offline one, and
+    // anything the live sequencer builds during that window gets built on the
+    // wrong context. The moment it tries to connect one of those to the live
+    // mixer the browser refuses, with "source and destination nodes belong to
+    // different audio contexts". Stopping first removes the whole problem, and
+    // matches what a recording studio does anyway: you do not monitor a bounce.
+    const engine = getEngine();
+    const wasPlaying = Tone.getTransport().state === 'started';
+    if (wasPlaying) {
+      Tone.getTransport().pause();
+      useAppStore.setState({ playing: false });
+    }
+    engine?.stop();
+
     try {
       const playingPerformance = usePerformance && hasPerformance && recordBaseSong;
       const songAt = playingPerformance
@@ -83,6 +104,21 @@ export function ExportPanel() {
       );
     } finally {
       setBusy('');
+      // Put playback back exactly as it was.
+      engine?.start();
+      if (wasPlaying) {
+        Tone.getTransport().start();
+        useAppStore.setState({ playing: true });
+      }
+    }
+  };
+
+  const loadSongFile = async (file: File) => {
+    try {
+      setSong(migrateSong(JSON.parse(await file.text())));
+      setStatus(`Loaded ${file.name}.`);
+    } catch {
+      setStatus('That file could not be read as a song.');
     }
   };
 
@@ -147,6 +183,23 @@ export function ExportPanel() {
         >
           Export the song file
         </button>
+        <button type="button" className="wide-button" onClick={() => songInput.current?.click()}>
+          Import a song file
+        </button>
+        {/*
+          No accept filter on purpose. iOS Safari greys out .json files when one
+          is set, which makes a song file impossible to pick on a phone.
+        */}
+        <input
+          ref={songInput}
+          type="file"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void loadSongFile(file);
+            event.target.value = '';
+          }}
+        />
       </div>
 
       {busy && <p className="hint">{busy}. This can take a few seconds.</p>}

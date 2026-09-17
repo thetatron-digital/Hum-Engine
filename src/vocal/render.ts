@@ -14,14 +14,19 @@ import { getProgression, chordAtBar, progressionBars } from '../music/progressio
 import { registerBuffer, cachedBuffer } from '../audio/samples';
 import { renderSpeech } from './speech';
 import { vocode } from './vocoder';
+import { storedVoiceTake } from './record';
 import { hashString } from '../music/rng';
 
 /** Everything that changes the sound, condensed into one cache key. */
 function signature(song: Song): string {
-  const { text, bands, brightness, formantShift, sibilance } = song.vocal;
+  const { source, mode, text, bands, brightness, formantShift, sibilance } = song.vocal;
+  const voice = storedVoiceTake();
+  // A recording is identified by its length, which is enough to notice that a
+  // different take was made without hashing every sample.
+  const takeId = source === 'voice' && voice ? `${voice.name}:${voice.samples.length}` : 'none';
   return String(
     hashString(
-      [text, bands, brightness.toFixed(2), formantShift.toFixed(2), sibilance.toFixed(2), song.mood, song.progression, song.tempo.toFixed(0)].join('|'),
+      [source, mode, takeId, text, bands, brightness.toFixed(2), formantShift.toFixed(2), sibilance.toFixed(2), song.mood, song.progression, song.tempo.toFixed(0)].join('|'),
     ),
   );
 }
@@ -48,6 +53,9 @@ export async function renderVocals(song: Song): Promise<void> {
   // One bar of the phrase at the current tempo, which keeps it in time.
   const duration = Math.min(6, (60 / song.tempo) * 4);
 
+  const take = song.vocal.source === 'voice' ? storedVoiceTake() : null;
+  if (song.vocal.source === 'voice' && !take) return;
+
   for (let index = 0; index < chordCount; index++) {
     const key = vocalKey(song, index);
     if (cachedBuffer(key) || rendering.has(key)) continue;
@@ -57,17 +65,22 @@ export async function renderVocals(song: Song): Promise<void> {
       const bar = index * progression.barsPerChord;
       const chord = chordAtBar(mood, progression, Math.floor(bar) % progressionBars(progression), 3);
 
-      const modulator = renderSpeech(song.vocal.text, {
-        sampleRate,
-        duration,
-        // The buzz pitch barely matters once the carrier takes over, but a low
-        // one keeps the formants readable.
-        pitch: 110,
-        formantShift: song.vocal.formantShift,
-      });
+      // A recording keeps its own length and pace, because that is the phrasing
+      // you performed. A built voice is stretched to fit a bar.
+      const modulator = take
+        ? take.samples
+        : renderSpeech(song.vocal.text, {
+            sampleRate,
+            duration,
+            // The buzz pitch barely matters once the carrier takes over, but a
+            // low one keeps the formants readable.
+            pitch: 110,
+            formantShift: song.vocal.formantShift,
+          });
 
       const samples = vocode(modulator, {
-        sampleRate,
+        sampleRate: take ? take.sampleRate : sampleRate,
+        mode: song.vocal.mode,
         bands: Math.round(song.vocal.bands),
         carrierNotes: chord.notes,
         brightness: song.vocal.brightness,
@@ -75,7 +88,7 @@ export async function renderVocals(song: Song): Promise<void> {
         sibilance: song.vocal.sibilance,
       });
 
-      const buffer = Tone.getContext().createBuffer(1, samples.length, sampleRate);
+      const buffer = Tone.getContext().createBuffer(1, samples.length, take ? take.sampleRate : sampleRate);
       buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
       registerBuffer(key, new Tone.ToneAudioBuffer(buffer));
     } finally {

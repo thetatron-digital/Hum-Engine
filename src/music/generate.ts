@@ -12,8 +12,9 @@ import { createDefaultSong } from '../state/song';
 import type { GenreId } from './patterns';
 import { PATTERNS } from './patterns';
 import { PROGRESSIONS } from './progressions';
-import type { MoodId } from './moods';
+import type { MoodId, PaletteId } from './moods';
 import { MOODS } from './moods';
+import { riffsForRole } from './riffs';
 import { makeRng, hashString, pick } from './rng';
 import { voicesForRole } from '../audio/voiceCatalog';
 
@@ -28,28 +29,30 @@ const TEMPO_RANGE: Record<GenreId, [number, number]> = {
 /** Which voices suit which genre, by voice id. Anything else is still allowed. */
 const GENRE_VOICES: Record<GenreId, Partial<Record<TrackId, string[]>>> = {
   french: {
-    kick: ['kick-punch', 'kick-deep', 'kick-909'],
-    snare: ['clap-house', 'snare-909'],
-    bass: ['bass-mono', 'bass-microkorg'],
-    chords: ['chords-supersaw', 'chords-stab', 'chords-rhodes'],
-    lead: ['lead-supersaw', 'lead-microkorg', 'lead-pluck'],
-    pad: ['pad-warm', 'chords-supersaw'],
+    kick: ['kick-909s', 'kick-punch', 'kick-deep', 'kick-909-long'],
+    snare: ['clap-909s', 'clap-house', 'snare-909s'],
+    hats: ['hat-909s', 'hat-closed', 'hat-909-open'],
+    bass: ['bass-moog', 'bass-mono', 'bass-microkorg', 'bass-juno'],
+    chords: ['chords-juno', 'chords-supersaw', 'chords-stab', 'chords-rhodes'],
+    lead: ['lead-dafunk', 'lead-supersaw', 'lead-microkorg', 'lead-pluck'],
+    pad: ['pad-warm', 'chords-juno', 'chords-supersaw'],
   },
   acid: {
-    kick: ['kick-distort', 'kick-punch'],
-    snare: ['snare-909', 'snare-noise'],
+    kick: ['kick-distort', 'kick-909s', 'kick-punch'],
+    snare: ['snare-909s', 'snare-noise'],
+    hats: ['hat-909s', 'hat-closed'],
     bass: ['bass-acid'],
     chords: ['chords-organ', 'chords-stab'],
-    lead: ['lead-tear', 'lead-microkorg'],
-    pad: ['pad-glass'],
+    lead: ['lead-tear', 'lead-derezzed', 'lead-microkorg'],
+    pad: ['pad-glass', 'pad-modular'],
   },
   trance: {
-    kick: ['kick-punch', 'kick-909'],
+    kick: ['kick-909s', 'kick-punch'],
     snare: ['clap-house'],
     bass: ['bass-mono', 'bass-fm'],
     chords: ['chords-supersaw'],
-    lead: ['lead-supersaw', 'lead-pluck'],
-    pad: ['chords-supersaw', 'pad-glass'],
+    lead: ['lead-supersaw', 'lead-pluck', 'lead-derezzed'],
+    pad: ['chords-supersaw', 'pad-glass', 'pad-modular'],
   },
   dnb: {
     kick: ['kick-punch', 'kick-909'],
@@ -64,9 +67,9 @@ const GENRE_VOICES: Record<GenreId, Partial<Record<TrackId, string[]>>> = {
     snare: ['snare-rim'],
     hats: ['hat-shaker'],
     bass: ['bass-sub'],
-    chords: ['chords-piano', 'chords-strings'],
-    lead: ['chords-strings', 'lead-brass'],
-    pad: ['pad-strings', 'pad-choir'],
+    chords: ['chords-piano', 'chords-strings', 'chords-tron-brass'],
+    lead: ['chords-strings', 'lead-brass', 'chords-tron-brass'],
+    pad: ['pad-strings', 'pad-choir', 'pad-modular'],
   },
 };
 
@@ -85,6 +88,21 @@ function voiceFor(id: TrackId, genre: GenreId, random: number): string {
   return available.length ? pick(available, random).id : '';
 }
 
+/**
+ * Which note palettes suit which genre.
+ *
+ * Five notes most of the time, because that is what makes a generated melody
+ * sound deliberate rather than wandering. Cinematic gets the full scale, since
+ * a score wants the extra colour and is not trying to be catchy.
+ */
+const GENRE_PALETTES: Record<GenreId, PaletteId[]> = {
+  french: ['pentatonic', 'pentatonic', 'full'],
+  acid: ['pentatonic', 'blues', 'blues'],
+  trance: ['pentatonic', 'full'],
+  dnb: ['pentatonic', 'blues'],
+  cinematic: ['full', 'full', 'pentatonic'],
+};
+
 export function randomSong(mood: MoodId, genre: GenreId, seed = String(Date.now())): Song {
   const random = makeRng(hashString(seed));
   const song = createDefaultSong();
@@ -95,6 +113,7 @@ export function randomSong(mood: MoodId, genre: GenreId, seed = String(Date.now(
   const [low, high] = TEMPO_RANGE[genre];
   song.tempo = Math.round(low + random() * (high - low));
   song.progression = pick(PROGRESSIONS, random()).id;
+  song.palette = pick(GENRE_PALETTES[genre], random());
   song.swing = genre === 'french' || genre === 'dnb' ? random() * 0.25 : 0;
 
   const cinematic = genre === 'cinematic';
@@ -105,6 +124,7 @@ export function randomSong(mood: MoodId, genre: GenreId, seed = String(Date.now(
     lowpass: 0.6 + random() * 0.4,
     highpass: 0,
     drive: cinematic ? random() * 0.12 : 0.12 + random() * 0.35,
+    crush: cinematic ? 0 : random() < 0.3 ? random() * 0.25 : 0,
     reverbSize: cinematic ? 0.55 + random() * 0.35 : 0.2 + random() * 0.4,
     delayTime: pick([0.375, 0.5, 0.75, 1], random()),
     delayFeedback: 0.2 + random() * 0.35,
@@ -121,6 +141,17 @@ export function randomSong(mood: MoodId, genre: GenreId, seed = String(Date.now(
     track.density = 0.36 + random() * 0.32;
     track.chaos = random() < 0.3 ? random() * 0.25 : 0;
     track.cutoff = Math.max(0.2, Math.min(0.95, 0.5 + bright * 0.3 + (random() - 0.5) * 0.3));
+
+    // The melody shape is the single biggest reason two generated songs sound
+    // like different pieces rather than the same one with different sounds, so
+    // it is always picked fresh.
+    if (id === 'bass' || id === 'lead') {
+      const shapes = riffsForRole(id);
+      if (shapes.length) track.riff = pick(shapes, random()).id;
+    }
+    if (id === 'lead' || id === 'chords') {
+      track.phase = random() < 0.35 ? random() * 0.35 : 0;
+    }
   }
 
   // The vocal and chop tracks need material you supply, so they start off.

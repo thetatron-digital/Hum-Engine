@@ -31,6 +31,7 @@ browser.
 | `npm run smoke` | Audio actually comes out of the speakers, and a Shift transitions, holds and returns. |
 | `npm run check:pitch` | Pitch detection is accurate. Feeds the detector known tones from 110 Hz to 440 Hz as both sine and sawtooth, and fails if any is off by more than half a semitone. Currently within 2 cents. |
 | `npm run check:hum` | The whole hum flow runs: permission, worklet, count-in, recording, note view. |
+| `npm run check:presets` | Loads every starting song and cycles the Lead through every voice, measuring what actually comes out. A voice with a mis-wired envelope builds fine, type checks fine and makes no sound, so this is the only thing that catches it. |
 | `npm run check:export` | Renders real WAV files, reads them back, and checks the mix is not silent, that the stems are the same length as it, and that no stem is secretly a copy of the mix. |
 
 `check:pitch` exists because Chromium's synthetic microphone is a rumble at
@@ -271,6 +272,17 @@ between steps, so writing the same automation point repeatedly throws. The
 engine now only writes a parameter when its value has actually moved, which
 also stops it rebuilding the reverb's impulse response sixteen times a bar.
 
+And a fifth, which only showed up on a real device: **`Tone.PolySynth`
+allocates its voices lazily.** Rendering swaps the global context for an
+offline one, so when the still-running live sequencer played a chord that
+needed one more voice than it had, that voice got built on the offline context
+and then refused to connect to the live mixer. The report was
+`InvalidAccessError: source and destination nodes belong to different audio
+contexts`, from a line of code nowhere near the cause. Playback now stops for
+the duration of a render, which removes the whole class of problem and is what
+a studio does anyway: you do not monitor a bounce. Anything built from an async
+continuation also names its context explicitly now.
+
 ---
 
 ## Build order
@@ -284,13 +296,26 @@ also stops it rebuilding the reverb's impulse response sixteen times a bar.
 - [x] 7. Vocals tier one (typed phrase through the vocoder) and tier two (vocal chops)
 - [x] 8. Export: full mix, stems, song file, and recorded performances
 - [x] 9. Eleven presets, random song, save as preset, mobile layout
-- [ ] 10. Deploy to Vercel. **Blocked:** creating a Vercel project from this
-      session is refused with `403 forbidden: You don't have permission to
-      create the project`, although reading the existing projects works. Import
-      the repo once at vercel.com/new and every push deploys itself after that.
-      Vite is detected automatically and no configuration is needed. Then turn
-      on Vercel Authentication under the project's Deployment Protection so the
-      deployment stays private.
+- [x] 10. Deployed at hum-engine.vercel.app. Turn on Vercel Authentication
+      under the project's Deployment Protection if it should stay private.
+
+## Since the first round of feedback
+
+- Melody shapes and the five note palette, so two songs sound like two songs.
+- Voices modelled on the actual Daft Punk gear, and five presets aimed at
+  specific records. See the table above.
+- The mic modulator vocoder: record your own voice and the chords sing it.
+- Swirl (phaser) per track, master Crush.
+- Choosers are bottom sheets rather than native dropdowns, so each option can
+  carry its explanation and be hit with a thumb.
+- Shift used to do nothing while stopped, because the blend is driven by
+  musical position and position was frozen. It now lands immediately when
+  stopped and glides only when there is musical time to glide through.
+- Importing a song file. The file inputs carry **no accept filter**, because
+  iOS Safari greys out `.json` files when one is set, which made a song file
+  impossible to pick on a phone.
+- Microphone constraints fall back when a device refuses to turn its own
+  processing off.
 
 ## Tier three, when it is wanted
 

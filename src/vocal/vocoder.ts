@@ -16,8 +16,24 @@
 import { bandpass, lowpass, highpass, step, reset, normalisePeak, fadeEdges } from './dsp';
 import { midiToFrequency } from '../music/moods';
 
+/**
+ * Two ways of making a voice out of a synth, and they do not sound alike.
+ *
+ * A vocoder splits the voice into a fixed row of frequency bands. That is the
+ * Roland SVC-350 sound heard all over Discovery, and it is the choral,
+ * harmonised robot.
+ *
+ * A talkbox is a physical thing: the synth is piped into the player's mouth
+ * and the mouth shapes it. There are no fixed bands, just two or three strong
+ * resonances moving around, and the synth's own low end comes through
+ * unshaped. That is a nasal, vowel-heavy, much more human sound, and it is
+ * what Around the World is.
+ */
+export type VocalMode = 'vocoder' | 'talkbox';
+
 export interface VocoderOptions {
   sampleRate: number;
+  mode: VocalMode;
   /** More bands means clearer words, fewer means a thicker, cruder robot. */
   bands: number;
   /** Notes the carrier plays, as MIDI numbers. Usually the current chord. */
@@ -33,10 +49,16 @@ export interface VocoderOptions {
   sibilance: number;
 }
 
-/** Log-spaced band centres across the range that carries speech. */
-function bandCentres(count: number): number[] {
-  const low = 160;
-  const high = 6200;
+/**
+ * Band centres, spaced evenly by ear rather than by hertz.
+ *
+ * The talkbox layout is narrower on purpose: it crowds the bands into the
+ * range where vowels live and leaves the extremes alone, which is roughly what
+ * a mouth does to a sound.
+ */
+function bandCentres(count: number, mode: VocalMode): number[] {
+  const low = mode === 'talkbox' ? 260 : 160;
+  const high = mode === 'talkbox' ? 3400 : 6200;
   const out: number[] = [];
   for (let i = 0; i < count; i++) {
     out.push(low * Math.pow(high / low, i / Math.max(1, count - 1)));
@@ -89,14 +111,15 @@ function renderCarrier(
  * the voice's own pitch.
  */
 export function vocode(modulator: Float32Array, options: VocoderOptions): Float32Array {
-  const { sampleRate, bands, carrierNotes, brightness, formantShift, sibilance } = options;
+  const { sampleRate, mode, bands, carrierNotes, brightness, formantShift, sibilance } = options;
   const length = modulator.length;
   const out = new Float32Array(length);
   const carrier = renderCarrier(length, sampleRate, carrierNotes, brightness);
-  const centres = bandCentres(bands);
+  const centres = bandCentres(bands, mode);
 
-  // Wider bands when there are fewer of them, so the whole range stays covered.
-  const q = Math.max(2, bands / 3.2);
+  // Wider bands when there are fewer of them, so the whole range stays
+  // covered. A talkbox's resonances are much sharper than a vocoder's bands.
+  const q = mode === 'talkbox' ? Math.max(5, bands / 1.6) : Math.max(2, bands / 3.2);
 
   for (let b = 0; b < centres.length; b++) {
     const centre = centres[b];
@@ -109,17 +132,44 @@ export function vocode(modulator: Float32Array, options: VocoderOptions): Float3
 
     for (let i = 0; i < length; i++) {
       const measured = step(follower, Math.abs(step(voiceBand, modulator[i])));
-      out[i] += step(carrierBand, carrier[i]) * measured * 2.6;
+      out[i] += step(carrierBand, carrier[i]) * measured * (mode === 'talkbox' ? 3.4 : 2.6);
     }
   }
 
-  // Consonants like s and t live above where the bands can usefully track, so
-  // a little of the original is passed straight through. Without this the
-  // words are much harder to make out.
+  // A talkbox passes the synth's own low end through unshaped, because a mouth
+  // does very little to those frequencies. It is most of why a talkbox sounds
+  // like an instrument talking and a vocoder sounds like a choir.
+  if (mode === 'talkbox') {
+    const body = lowpass(240, 0.7071, sampleRate);
+    for (let i = 0; i < length; i++) out[i] += step(body, carrier[i]) * 0.5;
+  }
+
+  /*
+   * The consonant channel.
+   *
+   * Consonants like s, t and k live above where the bands can usefully follow
+   * anything, so they have to come from the voice itself. The Roland SVC-350
+   * that made most of these records had ten bands plus exactly this: one extra
+   * channel carrying a high passed copy of the voice, gated so it only opens
+   * when there is actually a consonant there.
+   *
+   * The gate is the part that matters. Passing the high end through
+   * continuously, which is the obvious way to do it, adds a constant hiss and
+   * leaks the original voice's pitch back in underneath the chord. Gating it
+   * means you get the crack of the consonant and silence in between.
+   */
   if (sibilance > 0) {
     const air = highpass(3800, 0.7071, sampleRate);
+    const detector = lowpass(90, 0.7071, sampleRate);
+    let gate = 0;
     for (let i = 0; i < length; i++) {
-      out[i] += step(air, modulator[i]) * sibilance * 0.6;
+      const bright = step(air, modulator[i]);
+      const level = step(detector, Math.abs(bright));
+      // Opens quickly on a consonant and closes slowly, so the tail of an s
+      // is not chopped off.
+      const wanted = level > 0.006 ? 1 : 0;
+      gate += (wanted - gate) * (wanted > gate ? 0.02 : 0.0015);
+      out[i] += bright * gate * sibilance * 1.4;
     }
   }
 

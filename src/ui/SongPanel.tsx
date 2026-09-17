@@ -149,10 +149,13 @@ export function SongPanel() {
         <button type="button" className="wide-button" onClick={() => fileInput.current?.click()}>
           Load song file
         </button>
+        {/*
+          No accept filter: iOS Safari greys out .json files when one is set,
+          which makes a song file impossible to pick on a phone.
+        */}
         <input
           ref={fileInput}
           type="file"
-          accept="application/json,.json"
           hidden
           onChange={(event) => {
             const file = event.target.files?.[0];

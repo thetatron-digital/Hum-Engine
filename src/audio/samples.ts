@@ -192,11 +192,17 @@ function loadInstrumentBuffers(name: string): Promise<Record<string, Tone.ToneAu
  * the files cannot be fetched, which the calling voice treats as "stay on the
  * synth".
  */
-export async function instrumentSampler(name: string): Promise<Tone.Sampler | null> {
+export async function instrumentSampler(
+  name: string,
+  context?: Tone.BaseContext,
+): Promise<Tone.Sampler | null> {
   const buffers = await loadInstrumentBuffers(name);
   if (!buffers) return null;
   try {
-    return new Tone.Sampler({ urls: buffers });
+    // The context is passed in because this resolves later, by which time the
+    // app may be part way through an offline render and the current context
+    // may not be the one this sampler has to live on.
+    return new Tone.Sampler(context ? { urls: buffers, context } : { urls: buffers });
   } catch {
     return null;
   }

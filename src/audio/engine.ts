@@ -15,7 +15,8 @@
 import * as Tone from 'tone';
 import type { Song, TrackId, Track } from '../state/song';
 import { TRACK_ORDER, TRACK_ROLE, isMelodic } from '../state/song';
-import { MOODS, degreeToMidi } from '../music/moods';
+import { MOODS, degreeToMidi, paletteToMidi, nearestPalettePosition } from '../music/moods';
+import { getRiff } from '../music/riffs';
 import { getProgression, chordAtBar, chordIndexAtBar, voiceChordWide } from '../music/progressions';
 import { vocalKey } from '../vocal/render';
 import { getPattern, resolveSteps } from '../music/patterns';
@@ -34,10 +35,15 @@ export function resonanceToQ(value: number): number {
   return 0.4 + value * value * 22;
 }
 
+/** Tracks that carry notes, and therefore get a phaser. */
+const PHASED_TRACKS: TrackId[] = ['bass', 'chords', 'lead', 'pad', 'vocal'];
+
 interface TrackChain {
   voice: Voice;
   voiceId: string;
   filter: Tone.Filter;
+  /** Only present on the tracks listed above, to save the work elsewhere. */
+  phaser: Tone.Phaser | null;
   pump: Tone.Gain;
   panner: Tone.Panner;
   level: Tone.Gain;
@@ -58,6 +64,7 @@ export class Engine {
 
   private bus!: Tone.Gain;
   private fxReturn!: Tone.Gain;
+  private crush!: Tone.WaveShaper;
   private drive!: Tone.Distortion;
   private highpass!: Tone.Filter;
   private lowpass!: Tone.Filter;
@@ -69,6 +76,17 @@ export class Engine {
 
   /** Recomputed patterns are cached per bar so chaos is not re-rolled 16 times. */
   private stepCache = new Map<string, number[]>();
+
+  /**
+   * How many notes a track has already played, per position.
+   *
+   * Melody shapes advance one step per note played, not per sixteenth. That is
+   * what lets any shape sit on any rhythm: the same six note figure reads as a
+   * stabbing hook over offbeats and as a rolling line over sixteenths. Working
+   * that out means counting the hits before each position, so the answers are
+   * cached four bars at a time.
+   */
+  private ordinalCache = new Map<string, number[]>();
 
   /**
    * The last value written to each parameter.
@@ -123,6 +141,10 @@ export class Engine {
   private buildMaster(destination: Tone.ToneAudioNode): void {
     this.bus = new Tone.Gain(1);
     this.fxReturn = new Tone.Gain(1);
+    // Bit crush, done as a shaping curve rather than a worklet so it is
+    // deterministic and renders offline without any extra setup. At zero the
+    // curve is a straight line, which is a true bypass.
+    this.crush = new Tone.WaveShaper((x: number) => x, 2048);
     this.drive = new Tone.Distortion({ distortion: 0.2, oversample: '2x', wet: 1 });
     this.highpass = new Tone.Filter({ type: 'highpass', frequency: 20, rolloff: -24 });
     this.lowpass = new Tone.Filter({ type: 'lowpass', frequency: 18000, rolloff: -24 });
@@ -134,7 +156,7 @@ export class Engine {
     this.reverb = new Tone.Reverb({ decay: 2.4, preDelay: 0.02, wet: 1 });
     this.delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.3, wet: 1 });
 
-    this.bus.chain(this.drive, this.highpass, this.lowpass, this.compressor, this.limiter, this.masterGain);
+    this.bus.chain(this.crush, this.drive, this.highpass, this.lowpass, this.compressor, this.limiter, this.masterGain);
     this.masterGain.connect(destination);
     this.reverb.connect(this.fxReturn);
     this.delay.connect(this.fxReturn);
@@ -157,6 +179,9 @@ export class Engine {
     }
 
     const filter = new Tone.Filter({ type: 'lowpass', frequency: 18000, rolloff: -24 });
+    const phaser = PHASED_TRACKS.includes(id)
+      ? new Tone.Phaser({ frequency: 0.42, octaves: 3, baseFrequency: 420, wet: 0 })
+      : null;
     const pump = new Tone.Gain(1);
     const panner = new Tone.Panner(0);
     const level = new Tone.Gain(0.8);
@@ -166,14 +191,15 @@ export class Engine {
     const voiceDef = getVoice(track.voice, TRACK_ROLE[id]);
     const voice = createVoice(voiceDef, this.context);
     voice.output.connect(filter);
-    filter.chain(pump, panner, level);
+    if (phaser) filter.chain(phaser, pump, panner, level);
+    else filter.chain(pump, panner, level);
     level.connect(this.bus);
     level.connect(reverbSend);
     level.connect(delaySend);
     reverbSend.connect(this.reverb);
     delaySend.connect(this.delay);
 
-    const chain: TrackChain = { voice, voiceId: track.voice, filter, pump, panner, level, reverbSend, delaySend };
+    const chain: TrackChain = { voice, voiceId: track.voice, filter, phaser, pump, panner, level, reverbSend, delaySend };
     this.chains.set(id, chain);
     return chain;
   }
@@ -232,6 +258,7 @@ export class Engine {
     for (const chain of this.chains.values()) {
       chain.voice.dispose();
       chain.filter.dispose();
+      chain.phaser?.dispose();
       chain.pump.dispose();
       chain.panner.dispose();
       chain.level.dispose();
@@ -239,7 +266,7 @@ export class Engine {
       chain.delaySend.dispose();
     }
     this.chains.clear();
-    for (const node of [this.bus, this.fxReturn, this.drive, this.highpass, this.lowpass, this.compressor, this.limiter, this.masterGain, this.reverb, this.delay]) {
+    for (const node of [this.bus, this.fxReturn, this.crush, this.drive, this.highpass, this.lowpass, this.compressor, this.limiter, this.masterGain, this.reverb, this.delay]) {
       node.dispose();
     }
   }
@@ -331,6 +358,24 @@ export class Engine {
     if (this.stepCache.size > 400) this.stepCache.clear();
     this.stepCache.set(key, resolved);
     return resolved;
+  }
+
+  private hitOrdinal(song: Song, id: TrackId, track: Track, index: number): number {
+    const window = 64;
+    const start = Math.floor(index / window) * window;
+    const key = `${id}:${start}:${track.pattern.source}:${track.pattern.libraryId}:${track.density.toFixed(3)}:${track.chaos.toFixed(3)}:${song.seed}`;
+    let counts = this.ordinalCache.get(key);
+    if (!counts) {
+      counts = new Array<number>(window);
+      let running = 0;
+      for (let i = 0; i < window; i++) {
+        counts[i] = running;
+        if (this.velocityAt(song, id, track, start + i) > 0) running++;
+      }
+      if (this.ordinalCache.size > 200) this.ordinalCache.clear();
+      this.ordinalCache.set(key, counts);
+    }
+    return counts[index - start] ?? 0;
   }
 
   private velocityAt(song: Song, id: TrackId, track: Track, index: number): number {
@@ -448,35 +493,44 @@ export class Engine {
     const shift = track.octave * 12;
 
     switch (id) {
-      case 'bass': {
-        const chord = chordAtBar(mood, progression, bar, 2);
-        const root = chord.notes[0] + shift;
-        // Motion occasionally reaches for the fifth or an octave so a long
-        // loop does not sit on one note forever.
-        const roll = rngAt(song.seed, 'bass', index, 'motion');
-        if (roll < track.motion * 0.25) return [root + 12];
-        if (roll > 1 - track.motion * 0.25) return [chord.notes[2] + shift - 12];
-        return [root];
+      case 'bass':
+      case 'lead': {
+        const chord = chordAtBar(mood, progression, bar, id === 'bass' ? 2 : 5);
+        const riff = getRiff(track.riff, TRACK_ROLE[id]);
+        const ordinal = this.hitOrdinal(song, id, track, index);
+
+        // Start the shape from wherever the chord's root sits in the palette,
+        // so the same written shape follows the harmony instead of ignoring it.
+        const home = nearestPalettePosition(mood, song.palette, chord.notes[0]);
+        let position = home + riff.steps[ordinal % riff.steps.length];
+
+        // Motion nudges the line off the written shape now and then, so a loop
+        // running for minutes does not repeat exactly.
+        if (track.motion > 0.01) {
+          const roll = rngAt(song.seed, id, index, 'motion');
+          if (roll < track.motion * 0.22) position += 1;
+          else if (roll > 1 - track.motion * 0.22) position -= 1;
+          else if (roll > 0.5 - track.motion * 0.06 && roll < 0.5 + track.motion * 0.06) {
+            position += id === 'bass' ? -5 : 5;
+          }
+        }
+
+        const note = paletteToMidi(mood, song.palette, position, 0) + shift;
+        // A parallel interval, unsnapped, because that is what makes a lead in
+        // fourths or fifths sound like one.
+        return riff.parallel ? [note, note + riff.parallel] : [note];
       }
-      case 'chords': {
-        const chord = chordAtBar(mood, progression, bar, 4);
-        return chord.notes.map((n) => n + shift);
-      }
+      case 'chords':
       case 'pad': {
         const chord = chordAtBar(mood, progression, bar, 4);
-        return voiceChordWide(chord, 0.8).map((n) => n + shift);
-      }
-      case 'lead': {
-        const chord = chordAtBar(mood, progression, bar, 5);
-        // Walk through the chord tones, with the Motion knob deciding how
-        // often the line jumps somewhere less predictable.
-        const position = index % 8;
-        const roll = rngAt(song.seed, 'lead', index, 'pick');
-        const tone = roll < track.motion * 0.4
-          ? Math.floor(roll * 10) % chord.notes.length
-          : position % chord.notes.length;
-        const octaveJump = roll > 1 - track.motion * 0.2 ? 12 : 0;
-        return [chord.notes[tone] + shift + octaveJump];
+        const notes = id === 'pad' ? voiceChordWide(chord, 0.8) : chord.notes;
+        // Chords keep their harmony and vary by inversion: the bottom note
+        // moves up an octave each time round, which changes the shape of the
+        // voicing without changing what the chord is.
+        const turns = this.hitOrdinal(song, id, track, index) % notes.length;
+        const voiced = notes.slice();
+        for (let i = 0; i < turns; i++) voiced.push(voiced.shift()! + 12);
+        return voiced.map((n) => n + shift);
       }
       default:
         return [];
@@ -501,6 +555,16 @@ export class Engine {
     // These two rebuild a buffer or a curve when written, so they are only
     // touched when the knob has genuinely moved.
     this.setIfChanged('distortion', 0.05 + master.drive * 0.75, (value) => { this.drive.distortion = value; });
+    this.setIfChanged('crush', Math.round(master.crush * 100) / 100, (amount) => {
+      // Sixteen bits is transparent, three is a wreck. Blending the crushed
+      // value against the original rather than switching means the knob sweeps
+      // instead of stepping.
+      const bits = 16 - amount * 13;
+      const levels = Math.pow(2, bits - 1);
+      this.crush.setMap((x: number) =>
+        x * (1 - amount) + (Math.round(x * levels) / levels) * amount,
+      );
+    });
     this.setIfChanged('decay', 0.4 + master.reverbSize * 7, (value) => { this.reverb.decay = value; });
   }
 
@@ -513,6 +577,9 @@ export class Engine {
     this.rampIfChanged(chain.level.gain, `${id}.vol`, audible ? track.volume : 0, time, 0.04);
     this.rampIfChanged(chain.reverbSend.gain, `${id}.rev`, track.reverbSend, time, 0.05);
     this.rampIfChanged(chain.delaySend.gain, `${id}.dly`, track.delaySend, time, 0.05);
+    if (chain.phaser) {
+      this.rampIfChanged(chain.phaser.wet, `${id}.phase`, track.phase, time, 0.08);
+    }
     if (track.envAmount <= 0.01) {
       this.rampIfChanged(chain.filter.frequency, `${id}.cut`, cutoffToHz(track.cutoff), time, 0.04);
     } else {

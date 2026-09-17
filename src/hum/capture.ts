@@ -14,7 +14,7 @@
 
 import * as Tone from 'tone';
 import type { HumNote } from '../state/song';
-import type { Mood } from '../music/moods';
+import type { Mood, PaletteId } from '../music/moods';
 import { snapMidiToMood } from '../music/moods';
 import { addWorkletModule } from '../audio/worklets';
 
@@ -38,6 +38,8 @@ export interface CaptureSettings {
   /** Notes shorter than this many sixteenths are treated as slips. */
   minNoteSteps: number;
   mood: Mood;
+  /** Hummed notes are snapped into this set, so five notes means five notes. */
+  palette: PaletteId;
   tempo: number;
   /** Length of the loop the melody has to fit into, in sixteenths. */
   loopSteps: number;
@@ -401,20 +403,25 @@ export function finaliseNotes(notes: HumNote[], settings: CaptureSettings): HumN
   // In key, and in the octave you asked for. Last step, on purpose.
   return working.map((note) => ({
     ...note,
-    midi: snapMidiToMood(settings.mood, note.midi) + settings.octaveShift * 12,
+    midi: snapMidiToMood(settings.mood, note.midi, settings.palette) + settings.octaveShift * 12,
   }));
 }
 
-/** Re-snap an existing melody, for when the mood or octave changes afterwards. */
-export function resnapNotes(notes: HumNote[], mood: Mood): HumNote[] {
-  return notes.map((note) => ({ ...note, midi: snapMidiToMood(mood, note.midi) }));
+/** Re-snap an existing melody, for when the mood or palette changes afterwards. */
+export function resnapNotes(notes: HumNote[], mood: Mood, palette: PaletteId): HumNote[] {
+  return notes.map((note) => ({ ...note, midi: snapMidiToMood(mood, note.midi, palette) }));
 }
 
-/** Move one note by a scale step, used by the tap-to-nudge editor. */
-export function nudgeNote(note: HumNote, mood: Mood, direction: 1 | -1): HumNote {
+/** Move one note to the next allowed one, used by the tap-to-nudge editor. */
+export function nudgeNote(
+  note: HumNote,
+  mood: Mood,
+  palette: PaletteId,
+  direction: 1 | -1,
+): HumNote {
   let candidate = note.midi + direction;
-  for (let i = 0; i < 3; i++) {
-    const snapped = snapMidiToMood(mood, candidate);
+  for (let i = 0; i < 4; i++) {
+    const snapped = snapMidiToMood(mood, candidate, palette);
     if (snapped !== note.midi) return { ...note, midi: snapped };
     candidate += direction;
   }

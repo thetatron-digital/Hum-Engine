@@ -28,7 +28,164 @@ function pattern(song: Song, id: TrackId, libraryId: string): void {
   song.tracks[id].pattern = { source: 'library', libraryId, steps: [], notes: [] };
 }
 
+/*
+ * Four of these are aimed at specific records, and each one says which
+ * technique it is copying rather than just which song. The point is that the
+ * technique is the reusable part: once you know Da Funk is a band passed
+ * sawtooth in parallel fourths, you can put your own tune through it.
+ */
 export const PRESETS: PresetSpec[] = [
+  {
+    id: 'funk-machine',
+    name: 'Funk Machine',
+    blurb: 'Da Funk. A honking distorted lead in parallel fourths over a dragging beat.',
+    song: (song) => {
+      song.tempo = 111;
+      song.mood = 'dark';
+      song.palette = 'pentatonic';
+      song.progression = 'breathe';
+      song.master = { ...song.master, pump: 0.45, drive: 0.42, crush: 0.12, reverbSize: 0.28, delayTime: 0.5 };
+      song.swing = 0.22;
+      tweak(song, 'kick', { voice: 'kick-909s', volume: 0.95 });
+      pattern(song, 'kick', 'kick-shuffle');
+      tweak(song, 'snare', { voice: 'clap-909s', volume: 0.72 });
+      pattern(song, 'snare', 'snare-shuffle');
+      tweak(song, 'hats', { voice: 'hat-909s', density: 0.58, volume: 0.42 });
+      pattern(song, 'hats', 'hats-shuffle');
+      tweak(song, 'bass', { voice: 'bass-moog', riff: 'root-five', cutoff: 0.4, envAmount: 0.4, octave: -1 });
+      pattern(song, 'bass', 'bass-stab');
+      // The lead is the whole record: band passed, distorted, and played as
+      // two notes a fourth apart moving together.
+      tweak(song, 'lead', {
+        enabled: true, voice: 'lead-dafunk', riff: 'fourths',
+        cutoff: 0.62, resonance: 0.2, envAmount: 0.15,
+        volume: 0.5, phase: 0.18, delaySend: 0.14, pumpAmount: 0.5,
+      });
+      pattern(song, 'lead', 'lead-riff');
+      tweak(song, 'chords', { enabled: false });
+      tweak(song, 'pad', { voice: 'pad-warm', volume: 0.3, cutoff: 0.34 });
+      return song;
+    },
+  },
+  {
+    id: 'robot-riff',
+    name: 'Robot Riff',
+    blurb: 'Robot Rock. A hard sync riff, crushed and driven until it hurts.',
+    song: (song) => {
+      song.tempo = 110;
+      song.mood = 'tense';
+      song.palette = 'blues';
+      song.progression = 'hold';
+      song.master = { ...song.master, pump: 0.3, drive: 0.55, crush: 0.34, reverbSize: 0.2, lowpass: 0.9 };
+      tweak(song, 'kick', { voice: 'kick-909s', volume: 1 });
+      pattern(song, 'kick', 'kick-electro');
+      tweak(song, 'snare', { voice: 'snare-909s', volume: 0.8 });
+      pattern(song, 'snare', 'snare-backbeat');
+      tweak(song, 'hats', { voice: 'hat-909s', density: 0.45, volume: 0.35 });
+      pattern(song, 'hats', 'hats-offbeat');
+      tweak(song, 'bass', { voice: 'bass-moog', riff: 'root', cutoff: 0.3, envAmount: 0.3, octave: -1 });
+      pattern(song, 'bass', 'bass-driving');
+      // The original riff has an oscillator sync timbre, which is what the
+      // Tear voice does. Sync Amount is the knob that makes it tear.
+      tweak(song, 'lead', {
+        enabled: true, voice: 'lead-tear', riff: 'sync-riff', syncAmount: 0.52,
+        cutoff: 0.66, resonance: 0.3, envAmount: 0.3,
+        volume: 0.44, pumpAmount: 0.4, reverbSend: 0.12,
+      });
+      pattern(song, 'lead', 'lead-stabs');
+      tweak(song, 'chords', { enabled: false });
+      tweak(song, 'pad', { enabled: false });
+      return song;
+    },
+  },
+  {
+    id: 'circle-the-globe',
+    name: 'Circle The Globe',
+    blurb: 'Around the World. The bass line is the hook, and the voice is a talkbox.',
+    song: (song) => {
+      song.tempo = 121;
+      song.mood = 'melancholy';
+      song.palette = 'pentatonic';
+      song.progression = 'breathe';
+      song.master = { ...song.master, pump: 0.6, drive: 0.22, reverbSize: 0.32, delayTime: 0.75 };
+      song.vocal = { ...song.vocal, mode: 'talkbox', text: 'around the world', bands: 12, brightness: 0.7, sibilance: 0.3 };
+      tweak(song, 'kick', { voice: 'kick-909s' });
+      pattern(song, 'kick', 'kick-four');
+      tweak(song, 'snare', { voice: 'clap-909s', volume: 0.65 });
+      tweak(song, 'hats', { voice: 'hat-909-open', density: 0.5, volume: 0.4 });
+      pattern(song, 'hats', 'hats-offbeat');
+      // The line walks up and leaps an octave, which is why it sticks.
+      tweak(song, 'bass', {
+        voice: 'bass-moog', riff: 'octaves', cutoff: 0.46, envAmount: 0.3,
+        octave: -1, volume: 0.9, pumpAmount: 0.9,
+      });
+      pattern(song, 'bass', 'bass-driving');
+      tweak(song, 'chords', { voice: 'chords-juno', cutoff: 0.5, volume: 0.45, reverbSend: 0.3, phase: 0.15 });
+      pattern(song, 'chords', 'chords-stab-off');
+      tweak(song, 'vocal', { enabled: true, volume: 0.55, reverbSend: 0.25, delaySend: 0.2, pumpAmount: 0.5 });
+      pattern(song, 'vocal', 'vocal-call');
+      tweak(song, 'pad', { voice: 'chords-juno', volume: 0.3, cutoff: 0.4 });
+      return song;
+    },
+  },
+  {
+    id: 'the-grid',
+    name: 'The Grid',
+    blurb: 'Tron. Low brass ostinato, a modular pad that never settles, no dancefloor.',
+    song: (song) => {
+      song.tempo = 88;
+      song.mood = 'heroic';
+      song.palette = 'full';
+      song.progression = 'stairs';
+      song.master = { ...song.master, pump: 0.14, drive: 0.12, reverbSize: 0.75, lowpass: 0.9, delayFeedback: 0.35 };
+      tweak(song, 'kick', { voice: 'kick-soft', volume: 0.62, pumpAmount: 0 });
+      pattern(song, 'kick', 'kick-heart');
+      tweak(song, 'snare', { enabled: false });
+      tweak(song, 'hats', { voice: 'hat-shaker', volume: 0.2, density: 0.28 });
+      pattern(song, 'hats', 'hats-air');
+      tweak(song, 'bass', { voice: 'bass-sub', riff: 'pedal', cutoff: 0.36, envAmount: 0.06, octave: -1, pumpAmount: 0.2 });
+      pattern(song, 'bass', 'bass-drone');
+      // A repeating figure low in the brass, which is the sound of that score.
+      tweak(song, 'chords', {
+        voice: 'chords-tron-brass', cutoff: 0.72, resonance: 0.08, envAmount: 0.08,
+        volume: 0.5, reverbSend: 0.5, pumpAmount: 0.1,
+      });
+      pattern(song, 'chords', 'chords-hold');
+      tweak(song, 'lead', { enabled: true, voice: 'chords-strings', riff: 'pedal', cutoff: 0.68, volume: 0.35, reverbSend: 0.55, pumpAmount: 0.1 });
+      pattern(song, 'lead', 'lead-sparse');
+      tweak(song, 'pad', { voice: 'pad-modular', volume: 0.45, reverbSend: 0.7, pumpAmount: 0.1 });
+      return song;
+    },
+  },
+  {
+    id: 'derezzed-club',
+    name: 'Derezzed Club',
+    blurb: 'The neon club scene. Detuned squares through distortion over a hard electro beat.',
+    song: (song) => {
+      song.tempo = 130;
+      song.mood = 'tense';
+      song.palette = 'pentatonic';
+      song.progression = 'pulse';
+      song.master = { ...song.master, pump: 0.5, drive: 0.45, crush: 0.2, reverbSize: 0.3 };
+      tweak(song, 'kick', { voice: 'kick-909-long', volume: 1 });
+      pattern(song, 'kick', 'kick-four-push');
+      tweak(song, 'snare', { voice: 'snare-909s', volume: 0.75 });
+      pattern(song, 'snare', 'snare-backbeat-ghost');
+      tweak(song, 'hats', { voice: 'hat-909s', density: 0.68, volume: 0.42 });
+      pattern(song, 'hats', 'hats-sixteenth');
+      tweak(song, 'bass', { voice: 'bass-moog', riff: 'root-five', cutoff: 0.42, envAmount: 0.45, octave: -1 });
+      pattern(song, 'bass', 'bass-sixteenths');
+      tweak(song, 'lead', {
+        enabled: true, voice: 'lead-derezzed', riff: 'zigzag',
+        cutoff: 0.7, resonance: 0.3, envAmount: 0.35, volume: 0.42, phase: 0.22, pumpAmount: 0.5,
+      });
+      pattern(song, 'lead', 'lead-stabs');
+      tweak(song, 'chords', { voice: 'chords-juno', cutoff: 0.55, volume: 0.4, phase: 0.2 });
+      pattern(song, 'chords', 'chords-gate');
+      tweak(song, 'pad', { voice: 'pad-modular', volume: 0.3 });
+      return song;
+    },
+  },
   {
     id: 'robot-discotheque',
     name: 'Robot Discotheque',

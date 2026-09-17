@@ -146,7 +146,7 @@ export function HumPanel({ trackId, onClose }: { trackId: TrackId; onClose: () =
     if (!active) return;
     const captured = framesToNotes(
       active.frames,
-      { grid, octaveShift, timingTrim, minNoteSteps, mood, tempo: song.tempo, loopSteps },
+      { grid, octaveShift, timingTrim, minNoteSteps, mood, palette: song.palette, tempo: song.tempo, loopSteps },
       captureStart.current.contextTime,
       captureStart.current.step,
       active.estimatedLatency(),
@@ -169,7 +169,7 @@ export function HumPanel({ trackId, onClose }: { trackId: TrackId; onClose: () =
     setNotes((current) =>
       finaliseNotes(
         current.map((note) => ({ ...note, midi: note.midi - octaveShift * 12 })),
-        { ...next, timingTrim, mood, tempo: song.tempo, loopSteps },
+        { ...next, timingTrim, mood, palette: song.palette, tempo: song.tempo, loopSteps },
       ),
     );
   };
@@ -274,11 +274,11 @@ export function HumPanel({ trackId, onClose }: { trackId: TrackId; onClose: () =
           <div className="button-row">
             <button type="button" className="wide-button" disabled={selected === null} onClick={() => {
               if (selected === null) return;
-              setNotes((current) => current.map((note, index) => (index === selected ? nudgeNote(note, mood, 1) : note)));
+              setNotes((current) => current.map((note, index) => (index === selected ? nudgeNote(note, mood, song.palette, 1) : note)));
             }}>Note up</button>
             <button type="button" className="wide-button" disabled={selected === null} onClick={() => {
               if (selected === null) return;
-              setNotes((current) => current.map((note, index) => (index === selected ? nudgeNote(note, mood, -1) : note)));
+              setNotes((current) => current.map((note, index) => (index === selected ? nudgeNote(note, mood, song.palette, -1) : note)));
             }}>Note down</button>
             <button type="button" className="wide-button" disabled={selected === null} onClick={() => {
               if (selected === null) return;

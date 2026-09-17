@@ -20,7 +20,7 @@ let modPeak = 0, modEnergy = 0;
 for (const s of modulator) { modPeak = Math.max(modPeak, Math.abs(s)); modEnergy += s * s; }
 
 const out = vocode(modulator, {
-  sampleRate, bands: 20, carrierNotes: [50, 57, 62, 65], brightness: 0.8, formantShift: 1, sibilance: 0.25,
+  sampleRate, mode: 'vocoder', bands: 10, carrierNotes: [50, 57, 62, 65], brightness: 0.8, formantShift: 1, sibilance: 0.25,
 });
 
 let peak = 0, energy = 0, zeroCrossings = 0;

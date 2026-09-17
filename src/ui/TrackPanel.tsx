@@ -9,6 +9,7 @@
 import { useAppStore } from '../state/store';
 import { TRACK_LABELS, TRACK_ORDER, TRACK_ROLE, isMelodic, type TrackId } from '../state/song';
 import { getPattern, patternsForRole } from '../music/patterns';
+import { riffsForRole } from '../music/riffs';
 import { voicesForRole, getVoice } from '../audio/voiceCatalog';
 import { useState } from 'react';
 import { Knob, percent } from './Knob';
@@ -141,6 +142,18 @@ export function TrackDetail() {
         </button>
       )}
 
+      {(id === 'bass' || id === 'lead') && (
+        <div className="row">
+          <Picker
+            label="Melody shape"
+            tip="The shape the line moves in: up, down, jumping about, or sitting still. This is what makes two songs with the same rhythm sound like different pieces of music."
+            value={track.riff}
+            onChange={(value) => set('riff', value)}
+            options={riffsForRole(role).map((option) => ({ value: option.id, label: option.label, tip: option.tooltip }))}
+          />
+        </div>
+      )}
+
       <div className="grid-block">
         <div className="grid-head">
           <InfoLabel text="Steps" tip="Each square is a sixteenth of a bar. Tap to add or remove a hit. The taller marks are the four main beats." />
@@ -175,6 +188,9 @@ export function TrackDetail() {
         )}
         {melodic && (
           <Knob label="Motion" tip="How much the line wanders around the chord instead of repeating. Keeps a long loop alive." value={track.motion} defaultValue={0} onChange={(value) => set('motion', value)} accent={accent} />
+        )}
+        {['bass', 'chords', 'lead', 'pad', 'vocal'].includes(id) && (
+          <Knob label="Swirl" tip="Sweeping notch filters that make the sound seem to move past you. The classic phased lead." value={track.phase} defaultValue={0} onChange={(value) => set('phase', value)} accent={accent} />
         )}
         {voice.kind === 'tear' && (
           <Knob label="Sync Amount" tip="How violently the two oscillators fight each other. Right is the screaming, tearing sound." value={track.syncAmount} defaultValue={0.3} onChange={(value) => set('syncAmount', value)} accent={accent} />
