@@ -1,0 +1,437 @@
+/*
+ * Mobile first. Everything stacks in one column on a phone and spreads into
+ * columns on a laptop. Every target is at least 44px so it can be hit with a
+ * thumb, and nothing at all depends on hovering.
+ */
+
+:root {
+  --bg: #0c0e14;
+  --panel: #151925;
+  --panel-2: #1c2130;
+  --line: #2a3142;
+  --text: #e8ecf5;
+  --muted: #8b95ab;
+  --accent: #4db5ff;
+  --pump: #ff5c4d;
+  --shift: #a97bff;
+  --good: #4dd0a7;
+  --warn: #ff9f43;
+  --radius: 14px;
+  --tap: 44px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  /* Stops iOS from scaling text when the phone is turned sideways. */
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+button, select, input { font: inherit; color: inherit; }
+
+/* --- Start overlay ------------------------------------------------------ */
+
+.start-overlay {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: radial-gradient(120% 90% at 50% 0%, #1b2233 0%, var(--bg) 62%);
+}
+
+.start-card { max-width: 420px; text-align: center; }
+.start-card h1 { font-size: 34px; margin: 0 0 6px; letter-spacing: -0.02em; }
+.start-sub { color: var(--muted); margin: 0 0 28px; }
+
+.start-button {
+  width: 100%;
+  min-height: 64px;
+  border: none;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent), var(--shift));
+  color: #08101c;
+  font-size: 19px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.start-button:disabled { opacity: 0.6; }
+.start-note { color: var(--muted); font-size: 13px; margin-top: 20px; }
+.failure { color: var(--pump); text-align: center; padding: 0 16px; }
+
+/* --- Layout ------------------------------------------------------------- */
+
+.app {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.app-head h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+
+.status { font-size: 12px; color: var(--muted); }
+.status.is-playing { color: var(--good); }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.panel-head { margin-bottom: 10px; }
+.panel-title .info-trigger { font-size: 15px; font-weight: 650; }
+
+.row { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 620px) { .row { grid-template-columns: 1fr 1fr; } }
+
+.hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+/* --- Tooltips ----------------------------------------------------------- */
+
+.info { position: relative; display: inline-block; }
+
+.info-trigger {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-align: left;
+}
+
+.info-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.info-bubble {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  width: max(220px, 100%);
+  max-width: 78vw;
+  background: #222a3c;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Knobs -------------------------------------------------------------- */
+
+.knob-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px 6px;
+  margin-top: 10px;
+}
+
+.knob { display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+.knob-dial {
+  touch-action: none;
+  cursor: grab;
+  display: grid;
+  place-items: center;
+  /* Keeps the physical target at thumb size even when the dial is drawn small. */
+  min-width: var(--tap);
+  min-height: var(--tap);
+}
+.knob.is-dragging .knob-dial { cursor: grabbing; }
+.knob.is-disabled { opacity: 0.4; }
+.knob-dial:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 50%; }
+
+.knob-track { fill: none; stroke: #262d3d; stroke-width: 5; stroke-linecap: round; }
+.knob-fill { fill: none; stroke-width: 5; stroke-linecap: round; }
+.knob-cap { fill: var(--panel-2); stroke: #2c3446; stroke-width: 1; }
+.knob-pointer { stroke-width: 2.5; stroke-linecap: round; }
+
+.knob-value { font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.knob-label .info-trigger { font-size: 11px; }
+
+/* --- Pickers and buttons ------------------------------------------------ */
+
+.picker { display: flex; flex-direction: column; }
+
+.picker-select {
+  min-height: var(--tap);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  padding: 0 12px;
+  width: 100%;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.picker-tip { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+
+.toggle {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toggle.is-on { background: var(--accent); border-color: var(--accent); color: #08101c; }
+.toggle-warn.is-on { background: var(--warn); border-color: var(--warn); }
+.toggle-good.is-on { background: var(--good); border-color: var(--good); }
+
+.big-button {
+  flex: 1;
+  min-height: 56px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.big-play { background: var(--good); border-color: var(--good); color: #05140f; }
+.big-shift { background: linear-gradient(135deg, var(--shift), #6f7dff); border: none; color: #0a0716; min-height: 68px; font-size: 19px; }
+.big-return { background: var(--panel-2); }
+.big-button:disabled { opacity: 0.45; cursor: default; }
+
+.wide-button {
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.button-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+.text-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  min-height: 32px;
+  padding: 0;
+}
+
+/* --- Transport ---------------------------------------------------------- */
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  backdrop-filter: blur(8px);
+}
+
+.tap-button {
+  min-height: var(--tap);
+  min-width: 92px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  cursor: pointer;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Track chips -------------------------------------------------------- */
+
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.chips::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.chip.is-selected { border-color: var(--chip); color: var(--text); }
+.chip-dot { width: 8px; height: 8px; border-radius: 50%; background: #333b4d; }
+.chip.is-live .chip-dot { background: var(--chip); box-shadow: 0 0 8px var(--chip); }
+
+/* --- Track detail ------------------------------------------------------- */
+
+.track-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.track-head h2 { font-size: 17px; margin: 0; }
+.track-switches { display: flex; gap: 6px; }
+
+.grid-block { margin-top: 14px; }
+.grid-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.step-grid {
+  display: grid;
+  /* On a phone sixteen squares in a row leaves each one too small for a
+     thumb, so the bar wraps into two rows of eight instead. */
+  grid-template-columns: repeat(8, 1fr);
+  gap: 5px;
+  margin-top: 6px;
+}
+
+@media (min-width: 560px) {
+  .step-grid { grid-template-columns: repeat(16, 1fr); gap: 4px; }
+  .step { min-height: 26px; }
+}
+
+.step {
+  aspect-ratio: 1;
+  min-height: 38px;
+  border-radius: 6px;
+  border: 1px solid #262d3d;
+  background: #1a1f2c;
+  padding: 0;
+  cursor: pointer;
+}
+.step.is-beat { border-color: #3a4358; }
+.step.is-on { background: var(--accent); border-color: transparent; }
+.step.is-ghost { opacity: 0.55; }
+.step.is-playing { outline: 2px solid var(--text); }
+
+.voice-note { color: var(--muted); font-size: 13px; margin: 12px 0 0; }
+.value-note { color: var(--muted); font-size: 12px; margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+
+/* --- Harmony ------------------------------------------------------------ */
+
+.mood-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (min-width: 620px) { .mood-row { grid-template-columns: repeat(6, 1fr); } }
+
+.mood {
+  min-height: var(--tap);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mood.is-on { background: var(--accent); border-color: var(--accent); color: #08101c; }
+
+/* --- Shift -------------------------------------------------------------- */
+
+.shift-panel { border-top-color: var(--shift); }
+
+.shift-modes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 620px) { .shift-modes { grid-template-columns: repeat(5, 1fr); } }
+
+.shift-mode {
+  min-height: var(--tap);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 8px;
+}
+.shift-mode.is-on { background: var(--shift); border-color: var(--shift); color: #0a0716; }
+
+.shift-actions { display: flex; gap: 10px; margin-top: 12px; }
+
+.shift-meter { height: 6px; border-radius: 999px; background: #222a3c; margin-top: 12px; overflow: hidden; }
+.shift-meter-fill { height: 100%; background: var(--shift); transition: width 0.12s linear; }
+.shift-state { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+
+.bars-row { margin-top: 12px; }
+.bars-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+
+/* --- Songs -------------------------------------------------------------- */
+
+.name-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.name-field span { color: var(--muted); font-size: 12px; font-weight: 600; }
+.name-field input {
+  min-height: var(--tap);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  padding: 0 12px;
+}
+
+.preset-list { display: grid; gap: 8px; grid-template-columns: 1fr; }
+@media (min-width: 620px) { .preset-list { grid-template-columns: 1fr 1fr; } }
+
+.preset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.preset strong { font-size: 14px; }
+.preset span { color: var(--muted); font-size: 12px; }
+
+.app-foot { padding-top: 6px; }
