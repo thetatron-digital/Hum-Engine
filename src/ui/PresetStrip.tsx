@@ -11,16 +11,31 @@
 import { useAppStore } from '../state/store';
 import { PRESET_LIST, loadPreset } from '../state/presets';
 import { listUserPresets } from '../state/userPresets';
+import { randomSong } from '../music/generate';
 
 export function PresetStrip() {
   const setSong = useAppStore((state) => state.setSong);
   const current = useAppStore((state) => state.song.name);
+  const mood = useAppStore((state) => state.song.mood);
   const mine = listUserPresets();
 
   return (
     <div className="strip">
       <span className="strip-label">Start from</span>
       <div className="strip-scroll">
+        {/*
+          First in the row, because a whole arrangement you have never heard
+          before is the fastest way to get somewhere, and because it keeps the
+          generator reachable without a panel of its own.
+        */}
+        <button
+          type="button"
+          className="strip-item is-random"
+          onClick={() => setSong(randomSong(mood, 'french'))}
+          title="Builds a complete new arrangement in the current feeling."
+        >
+          Random
+        </button>
         {mine.map((preset) => (
           <button
             type="button"

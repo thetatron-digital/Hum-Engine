@@ -16,6 +16,7 @@ import { GENRES, type GenreId } from '../music/patterns';
 import type { MoodId } from '../music/moods';
 import { Picker } from './Controls';
 import { InfoLabel } from './Tooltip';
+import { Reveal } from './Reveal';
 
 export function SongPanel() {
   const song = useAppStore((state) => state.song);
@@ -57,6 +58,21 @@ export function SongPanel() {
         <input value={song.name} onChange={(event) => setParam('name', event.target.value)} />
       </label>
 
+      <div className="button-row">
+        <button
+          type="button"
+          className="wide-button"
+          onClick={() => {
+            setSaved(saveUserPreset(song, song.name));
+            setMessage(`Saved ${song.name || 'Untitled'} as a preset.`);
+          }}
+        >
+          Save as preset
+        </button>
+      </div>
+      {message && <p className="hint">{message}</p>}
+
+      <Reveal label="All the starting songs, and song files">
       <div className="preset-list">
         {PRESET_LIST.map((preset) => (
           <button
@@ -133,16 +149,6 @@ export function SongPanel() {
         >
           Random song
         </button>
-        <button
-          type="button"
-          className="wide-button"
-          onClick={() => {
-            setSaved(saveUserPreset(song, song.name));
-            setMessage(`Saved ${song.name || 'Untitled'} as a preset.`);
-          }}
-        >
-          Save as preset
-        </button>
         <button type="button" className="wide-button" onClick={download}>
           Download song file
         </button>
@@ -164,7 +170,7 @@ export function SongPanel() {
           }}
         />
       </div>
-      {message && <p className="hint">{message}</p>}
+      </Reveal>
     </section>
   );
 }

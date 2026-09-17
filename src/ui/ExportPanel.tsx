@@ -17,6 +17,7 @@ import { makePerformancePlayer, performanceBars } from '../export/performance';
 import { encodeWav, downloadBlob, safeFilename, TARGET_SAMPLE_RATE } from '../export/wav';
 import { ToggleButton } from './Controls';
 import { InfoLabel } from './Tooltip';
+import { Reveal } from './Reveal';
 
 const BAR_CHOICES = [4, 8, 16, 32, 64];
 
@@ -139,6 +140,19 @@ export function ExportPanel() {
         </div>
       </div>
 
+      <div className="button-row">
+        <button type="button" className="wide-button" disabled={Boolean(busy)} onClick={() => void run(false)}>
+          Export the mix
+        </button>
+        <button type="button" className="wide-button" disabled={Boolean(busy)} onClick={() => void run(true)}>
+          Export the mix and every track
+        </button>
+      </div>
+
+      {busy && <p className="hint">{busy}. This can take a few seconds.</p>}
+      {status && <p className="hint">{status}</p>}
+
+      <Reveal label="Performances and song files">
       <div className="sub-panel">
         <InfoLabel
           text="Record a performance"
@@ -170,12 +184,6 @@ export function ExportPanel() {
       </div>
 
       <div className="button-row">
-        <button type="button" className="wide-button" disabled={Boolean(busy)} onClick={() => void run(false)}>
-          Export the mix
-        </button>
-        <button type="button" className="wide-button" disabled={Boolean(busy)} onClick={() => void run(true)}>
-          Export the mix and every track
-        </button>
         <button
           type="button"
           className="wide-button"
@@ -202,14 +210,12 @@ export function ExportPanel() {
         />
       </div>
 
-      {busy && <p className="hint">{busy}. This can take a few seconds.</p>}
-      {status && <p className="hint">{status}</p>}
-
       <p className="hint">
         Files are 48 kHz, 16 bit stereo. The separate tracks are taken before the master drive,
         sweeps and compression, so they add back up to the mix but each one on its own will sound
         a little rawer than the full mix does.
       </p>
+      </Reveal>
     </section>
   );
 }

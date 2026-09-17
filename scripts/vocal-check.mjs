@@ -10,11 +10,43 @@
  *
  *   npm run check:vocal
  */
-import { renderSpeech } from '../src/vocal/speech.ts';
 import { vocode } from '../src/vocal/vocoder.ts';
 
 const sampleRate = 48000;
-const modulator = renderSpeech('we are the robots', { sampleRate, duration: 1.6, pitch: 110, formantShift: 1 });
+
+/**
+ * A stand-in for a recorded voice.
+ *
+ * Alternating voiced and unvoiced segments at speech-like rates: a buzzing
+ * tone with harmonics for the vowels, filtered noise for the consonants, and
+ * short silences between words. What matters for this test is that the
+ * loudness and the spectrum both move the way a voice does, because that is
+ * what the vocoder reads.
+ */
+function fakeVoice(seconds) {
+  const total = Math.round(seconds * sampleRate);
+  const out = new Float32Array(total);
+  const segment = Math.round(sampleRate * 0.12);
+  let phase = 0;
+  for (let i = 0; i < total; i++) {
+    const which = Math.floor(i / segment);
+    const inside = (i % segment) / segment;
+    // Every fifth segment is a gap, so there is something for a silence
+    // detector to find.
+    if (which % 5 === 4) continue;
+    const voiced = which % 2 === 0;
+    const pitch = 105 + (which % 3) * 18;
+    phase += pitch / sampleRate;
+    if (phase >= 1) phase -= 1;
+    const buzz = 2 * phase - 1;
+    const noise = Math.random() * 2 - 1;
+    const envelope = Math.min(1, inside * 8, (1 - inside) * 8);
+    out[i] = (voiced ? buzz * 0.8 : noise * 0.5) * envelope;
+  }
+  return out;
+}
+
+const modulator = fakeVoice(1.6);
 
 let modPeak = 0, modEnergy = 0;
 for (const s of modulator) { modPeak = Math.max(modPeak, Math.abs(s)); modEnergy += s * s; }

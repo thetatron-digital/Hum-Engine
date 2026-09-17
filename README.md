@@ -32,7 +32,11 @@ browser.
 | `npm run check:pitch` | Pitch detection is accurate. Feeds the detector known tones from 110 Hz to 440 Hz as both sine and sawtooth, and fails if any is off by more than half a semitone. Currently within 2 cents. |
 | `npm run check:hum` | The whole hum flow runs: permission, worklet, count-in, recording, note view. |
 | `npm run check:presets` | Loads every starting song and cycles the Lead through every voice, measuring what actually comes out. A voice with a mis-wired envelope builds fine, type checks fine and makes no sound, so this is the only thing that catches it. |
-| `npm run check:export` | Renders real WAV files, reads them back, and checks the mix is not silent, that the stems are the same length as it, and that no stem is secretly a copy of the mix. |
+| `npm run check:knobs` | Knobs respond to a real touch drag, a mouse drag, and a tap opening the slider, using the browser's own input pipeline. This exists because a completely dead knob once passed every other check in this repo. |
+| `npm run check:simple` | The short interface really is short, every control is still reachable by unfolding, and the choice survives a reload. |
+| `npm run check:upgrade` | The app still plays when it loads a song saved by an older version, which is the only situation a real user is ever in. |
+| `npm run check:silence` | A silent mix explains why and offers a working fix, and a deliberate filter sweep is not mistaken for a fault. |
+| `npm run check:export` | Renders real WAV files, reads them back, and checks the mix is not silent, that the stems are the same length as it, that no stem is secretly a copy of the mix, and that playback resumes afterwards. |
 
 `check:pitch` exists because Chromium's synthetic microphone is a rumble at
 about 22 Hz, which the detector rightly refuses, so `check:hum` can only
@@ -305,6 +309,11 @@ continuation also names its context explicitly now.
 - Voices modelled on the actual Daft Punk gear, and five presets aimed at
   specific records. See the table above.
 - The mic modulator vocoder: record your own voice and the chords sing it.
+  This is now the only way the vocal track works. Typing the words instead,
+  with the voice built from scratch out of a buzz and three resonances, was
+  honest formant synthesis and sounded like it. It has been removed rather than
+  left in sounding poor; `src/vocal/speech.ts` is deleted and the git history
+  has it if it is ever wanted back.
 - Swirl (phaser) per track, master Crush.
 - Choosers are bottom sheets rather than native dropdowns, so each option can
   carry its explanation and be hit with a thumb.
@@ -324,6 +333,52 @@ in as another entry in `SynthKind` and another case in `buildKind`, fed by a
 renderer alongside `src/vocal/render.ts` that returns buffers into the same
 cache. Nothing else has to change, because the Vocal track already plays
 whatever buffer it is handed.
+
+---
+
+## Simple and Everything
+
+The app opens short. Simple shows Play and tempo, the starting songs, Shift,
+one track's Voice, Pattern, Density and Tone, the Feeling, Pump and Sweep
+down, and the export buttons. That is five knobs. Everything shows
+twenty-two.
+
+Nothing is deleted in Simple, only folded behind a "More controls" line on
+each panel, and each panel keeps its own fold. `src/ui/Reveal.tsx` holds the
+whole mechanism; in Everything mode it renders its children and gets out of
+the way.
+
+The order of the first screen answers one question: what do you want without
+scrolling. Tap a name, press play, hear something. Everything that shapes what
+you just heard comes after it.
+
+---
+
+## Two hard-won notes on touch
+
+**A knob needs a second way in.** Dragging a dial is a poor primary control on
+a phone: small target, gesture competing with the page scroll, and the pointer
+handling that makes it work is exactly the part browsers disagree about. Knobs
+did not respond to touch at all on a real device. So a tap now opens a sheet
+with a **native range input**, which every phone has spent years getting
+right and which no gesture code of ours can break. Drag is still there; the
+two are told apart by whether the finger moved more than six pixels.
+
+Three specific traps, all found the hard way:
+
+1. **`setPointerCapture` is a WebKit trouble spot.** Listening on the window
+   does the same job with nothing to disagree about.
+2. **An element with a `backdrop-filter` becomes the reference for fixed
+   positioning inside it.** A sheet opened from the transport bar was
+   positioned against the bar, not the screen, and half of it sat off the top
+   of the display. Sheets render into the body through a portal now.
+3. **The tap that opens a sheet also closes it.** A browser sends a click
+   after a touch ends, at the same point, and the backdrop is under it. The
+   sheet ignores clicks for a third of a second after opening.
+
+**The phone's silent switch mutes Web Audio**, with the volume turned up and no
+way for the page to detect it. An hour was lost to this. The start screen says
+so now.
 
 ---
 

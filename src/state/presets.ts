@@ -108,7 +108,7 @@ export const PRESETS: PresetSpec[] = [
       song.palette = 'pentatonic';
       song.progression = 'breathe';
       song.master = { ...song.master, pump: 0.6, drive: 0.22, reverbSize: 0.32, delayTime: 0.75 };
-      song.vocal = { ...song.vocal, mode: 'talkbox', text: 'around the world', bands: 12, brightness: 0.7, sibilance: 0.3 };
+      song.vocal = { ...song.vocal, mode: 'talkbox', bands: 12, brightness: 0.7, sibilance: 0.3 };
       tweak(song, 'kick', { voice: 'kick-909s' });
       pattern(song, 'kick', 'kick-four');
       tweak(song, 'snare', { voice: 'clap-909s', volume: 0.65 });

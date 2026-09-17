@@ -13,6 +13,7 @@ import type { ShiftModeId } from '../state/song';
 import { Knob } from './Knob';
 import { BigButton, Picker, ToggleButton } from './Controls';
 import { InfoLabel } from './Tooltip';
+import { Reveal } from './Reveal';
 
 // ---------------------------------------------------------------------------
 // Harmony
@@ -44,29 +45,31 @@ export function HarmonyPanel() {
       </div>
       <p className="hint">{MOOD_LIST.find((option) => option.id === mood)?.tooltip}</p>
 
-      <div className="palette-row">
-        <InfoLabel text="How many notes" tip="How much of the scale melodies may use. Five notes is the one that always works: the two notes it leaves out are the ones that sound like a mistake." />
-        <div className="bars-buttons">
-          {PALETTES.map((option) => (
-            <ToggleButton
-              key={option.id}
-              on={palette === option.id}
-              onClick={() => setParam('palette', option.id as PaletteId)}
-            >
-              {option.label}
-            </ToggleButton>
-          ))}
+      <Reveal label="More harmony">
+        <div className="palette-row">
+          <InfoLabel text="How many notes" tip="How much of the scale melodies may use. Five notes is the one that always works: the two notes it leaves out are the ones that sound like a mistake." />
+          <div className="bars-buttons">
+            {PALETTES.map((option) => (
+              <ToggleButton
+                key={option.id}
+                on={palette === option.id}
+                onClick={() => setParam('palette', option.id as PaletteId)}
+              >
+                {option.label}
+              </ToggleButton>
+            ))}
+          </div>
+          <p className="hint">{PALETTES.find((option) => option.id === palette)?.tooltip}</p>
         </div>
-        <p className="hint">{PALETTES.find((option) => option.id === palette)?.tooltip}</p>
-      </div>
 
-      <Picker
-        label="Chord movement"
-        tip="How the chords travel over a few bars. Pick by listening rather than by name."
-        value={progression}
-        onChange={(value) => setParam('progression', value)}
-        options={PROGRESSIONS.map((option) => ({ value: option.id, label: option.label, tip: option.tooltip }))}
-      />
+        <Picker
+          label="Chord movement"
+          tip="How the chords travel over a few bars. Pick by listening rather than by name."
+          value={progression}
+          onChange={(value) => setParam('progression', value)}
+          options={PROGRESSIONS.map((option) => ({ value: option.id, label: option.label, tip: option.tooltip }))}
+        />
+      </Reveal>
     </section>
   );
 }
@@ -88,21 +91,28 @@ export function MasterPanel() {
       <header className="panel-head">
         <InfoLabel text="Master" tip="Controls that affect the whole track at once. These are the knobs to perform with." className="panel-title" />
       </header>
+      {/*
+        Two knobs out in the open. Pump is the breathing that defines this
+        whole style of music, and Sweep down is the move you perform with, so
+        they are the last two things that should ever be behind a fold.
+      */}
       <div className="knob-row">
         <Knob label="Pump" tip="How hard everything ducks under the kick. This breathing is the single most recognisable thing about this style of music." value={master.pump} defaultValue={0.55} onChange={(value) => set('pump', value)} size={78} accent="var(--pump)" />
-        <Knob label="Pump speed" tip="How quickly the sound recovers after each kick. Left is a fast tight snap, right is a long slow swell." value={master.pumpRelease} defaultValue={0.65} onChange={(value) => set('pumpRelease', value)} accent="var(--pump)" />
         <Knob label="Sweep down" tip="Closes the whole mix down. Turn it left through a build and open it again on the drop." value={master.lowpass} defaultValue={1} onChange={(value) => set('lowpass', value)} size={78} />
-        <Knob label="Sweep up" tip="Removes the low end. Turning it right thins everything out and makes the return of the bass hit harder." value={master.highpass} defaultValue={0} onChange={(value) => set('highpass', value)} />
       </div>
-      <div className="knob-row">
-        <Knob label="Drive" tip="Pushes the mix into distortion. A little glues it together, a lot makes it dirty." value={master.drive} defaultValue={0.2} onChange={(value) => set('drive', value)} />
-        <Knob label="Crush" tip="Throws away detail until the whole thing sounds like a broken machine. A little adds grit, a lot is the Human After All sound." value={master.crush} defaultValue={0} onChange={(value) => set('crush', value)} />
-        <Knob label="Room size" tip="How big the space around the music sounds. Right is a cathedral." value={master.reverbSize} defaultValue={0.35} onChange={(value) => set('reverbSize', value)} />
-        <Knob label="Echo time" tip="How far apart the repeats are, always locked to the tempo so they stay in time." value={master.delayTime} min={0.125} max={2} defaultValue={0.75} onChange={(value) => set('delayTime', value)} format={(value) => `${value.toFixed(2)} beats`} />
-        <Knob label="Echo feed" tip="How many times each repeat comes back before it dies away." value={master.delayFeedback} defaultValue={0.3} onChange={(value) => set('delayFeedback', value)} />
-        <Knob label="Swing" tip="Pushes every other sixteenth note late, which makes a stiff machine pattern feel human." value={swing} defaultValue={0} onChange={(value) => setParam('swing', value)} />
-        <Knob label="Volume" tip="Overall output level." value={master.volume} defaultValue={0.85} onChange={(value) => set('volume', value)} />
-      </div>
+
+      <Reveal label="More master controls">
+        <div className="knob-row">
+          <Knob label="Pump speed" tip="How quickly the sound recovers after each kick. Left is a fast tight snap, right is a long slow swell." value={master.pumpRelease} defaultValue={0.65} onChange={(value) => set('pumpRelease', value)} accent="var(--pump)" />
+          <Knob label="Sweep up" tip="Removes the low end. Turning it right thins everything out and makes the return of the bass hit harder." value={master.highpass} defaultValue={0} onChange={(value) => set('highpass', value)} />
+          <Knob label="Drive" tip="Pushes the mix into distortion. A little glues it together, a lot makes it dirty." value={master.drive} defaultValue={0.2} onChange={(value) => set('drive', value)} />
+          <Knob label="Crush" tip="Throws away detail until the whole thing sounds like a broken machine. A little adds grit, a lot is the Human After All sound." value={master.crush} defaultValue={0} onChange={(value) => set('crush', value)} />
+          <Knob label="Room size" tip="How big the space around the music sounds. Right is a cathedral." value={master.reverbSize} defaultValue={0.35} onChange={(value) => set('reverbSize', value)} />
+          <Knob label="Echo time" tip="How far apart the repeats are, always locked to the tempo so they stay in time." value={master.delayTime} min={0.125} max={2} defaultValue={0.75} onChange={(value) => set('delayTime', value)} format={(value) => `${value.toFixed(2)} beats`} />
+          <Knob label="Echo feed" tip="How many times each repeat comes back before it dies away." value={master.delayFeedback} defaultValue={0.3} onChange={(value) => set('delayFeedback', value)} />
+          <Knob label="Swing" tip="Pushes every other sixteenth note late, which makes a stiff machine pattern feel human." value={swing} defaultValue={0} onChange={(value) => setParam('swing', value)} />
+          <Knob label="Volume" tip="Overall output level." value={master.volume} defaultValue={0.85} onChange={(value) => set('volume', value)} />
+        </div>
 
       {/*
         Always reachable, not only when something can be diagnosed. Any of
@@ -110,15 +120,16 @@ export function MasterPanel() {
         you go, so there has to be a way back that does not mean hunting for
         which one it was.
       */}
-      <div className="button-row">
-        <button type="button" className="wide-button" onClick={() => setSong(restoreSound(song))}>
-          Restore sound settings
-        </button>
-      </div>
-      <p className="hint">
-        Puts the volume, the sweeps and the mute switches back to sensible values. Your voices,
-        patterns, melody shapes and mood are left exactly as they are.
-      </p>
+        <div className="button-row">
+          <button type="button" className="wide-button" onClick={() => setSong(restoreSound(song))}>
+            Restore sound settings
+          </button>
+        </div>
+        <p className="hint">
+          Puts the volume, the sweeps and the mute switches back to sensible values. Your voices,
+          patterns, melody shapes and mood are left exactly as they are.
+        </p>
+      </Reveal>
     </section>
   );
 }
@@ -180,16 +191,18 @@ export function ShiftPanel() {
         {!playing && ' · press Play to hear it, and to make Shift glide rather than land'}
       </p>
 
-      <div className="bars-row">
-        <InfoLabel text="Transition length" tip="How many bars the change takes. Longer feels like a scene turning, shorter feels like a cut." />
-        <div className="bars-buttons">
-          {[1, 2, 4, 8].map((bars) => (
-            <ToggleButton key={bars} on={transitionBars === bars} onClick={() => setParam('shift.transitionBars', bars)}>
-              {bars} {bars === 1 ? 'bar' : 'bars'}
-            </ToggleButton>
-          ))}
+      <Reveal label="Transition length">
+        <div className="bars-row">
+          <InfoLabel text="Transition length" tip="How many bars the change takes. Longer feels like a scene turning, shorter feels like a cut." />
+          <div className="bars-buttons">
+            {[1, 2, 4, 8].map((bars) => (
+              <ToggleButton key={bars} on={transitionBars === bars} onClick={() => setParam('shift.transitionBars', bars)}>
+                {bars} {bars === 1 ? 'bar' : 'bars'}
+              </ToggleButton>
+            ))}
+          </div>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

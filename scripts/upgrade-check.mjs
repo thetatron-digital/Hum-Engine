@@ -71,7 +71,8 @@ await page.goto(URL, { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: /tap to start/i }).click();
 await page.waitForTimeout(1200);
 // Touch a control so the debounced save definitely runs.
-await page.locator('.strip-item').first().click();
+// Not the first chip, which is Random and would give a different song each run.
+await page.locator('.strip-item:not(.is-random)').first().click();
 await page.waitForTimeout(1200);
 
 const current = await page.evaluate((key) => localStorage.getItem(key), KEY);

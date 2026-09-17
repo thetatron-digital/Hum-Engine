@@ -16,6 +16,7 @@ import { Knob, percent } from './Knob';
 import { HumPanel } from './HumPanel';
 import { ClipControls, VocalControls } from './ClipPanel';
 import { Picker, StepGrid, ToggleButton } from './Controls';
+import { Reveal } from './Reveal';
 import { InfoLabel } from './Tooltip';
 
 export const TRACK_ACCENTS: Record<TrackId, string> = {
@@ -120,7 +121,7 @@ export function TrackDetail() {
         />
         <Picker
           label="Pattern"
-          tip="A ready-made rhythm. Tapping squares below writes your own instead."
+          tip="A ready-made rhythm. You can draw your own under the extra controls."
           value={usingGrid ? '__custom' : track.pattern.libraryId}
           onChange={(value) => {
             setParam(`tracks.${id}.pattern.libraryId`, value);
@@ -128,7 +129,7 @@ export function TrackDetail() {
           }}
           options={[
             ...patternsForRole(role).map((option) => ({ value: option.id, label: option.label, tip: option.tooltip })),
-            ...(usingGrid ? [{ value: '__custom', label: 'My own pattern', tip: 'The squares you tapped in below.' }] : []),
+            ...(usingGrid ? [{ value: '__custom', label: 'My own pattern', tip: 'The squares you tapped in.' }] : []),
           ]}
         />
       </div>
@@ -136,12 +137,23 @@ export function TrackDetail() {
       {id === 'vocal' && <VocalControls />}
       {id === 'chop' && <ClipControls />}
 
+      {/*
+        Two knobs in the open. How busy the part is and how bright it is are
+        the two things you reach for constantly; everything else on this track
+        is a refinement of one of them, so everything else folds away.
+      */}
+      <div className="knob-row">
+        <Knob label="Density" tip="Adds or removes hits for you. Left thins the pattern out, right fills the gaps." value={track.density} defaultValue={0.5} onChange={(value) => set('density', value)} accent={accent} />
+        <Knob label="Tone" tip="Closes the sound down when turned left and opens it up when turned right. The main way this music builds and releases." value={track.cutoff} defaultValue={0.8} onChange={(value) => set('cutoff', value)} accent={accent} />
+      </div>
+
       {melodic && (
         <button type="button" className="hum-button" onClick={() => setHumming(true)}>
           Hum a melody into this track
         </button>
       )}
 
+      <Reveal label={`More ${TRACK_LABELS[id].toLowerCase()} controls`}>
       {(id === 'bass' || id === 'lead') && (
         <div className="row">
           <Picker
@@ -170,9 +182,7 @@ export function TrackDetail() {
       </div>
 
       <div className="knob-row">
-        <Knob label="Density" tip="Adds or removes hits for you. Left thins the pattern out, right fills the gaps." value={track.density} defaultValue={0.5} onChange={(value) => set('density', value)} accent={accent} />
         <Knob label="Chaos" tip="Lets the pattern vary itself each bar, but only in ways that still fit the groove." value={track.chaos} defaultValue={0} onChange={(value) => set('chaos', value)} accent={accent} />
-        <Knob label="Tone" tip="Closes the sound down when turned left and opens it up when turned right. The main way this music builds and releases." value={track.cutoff} defaultValue={0.8} onChange={(value) => set('cutoff', value)} accent={accent} />
         <Knob label="Bite" tip="Emphasises the exact frequency the Tone knob is set to. A little adds edge, a lot makes it whistle and squelch." value={track.resonance} defaultValue={0.15} onChange={(value) => set('resonance', value)} accent={accent} />
         <Knob label="Snap" tip="How far the Tone opens on each hit before falling back. This is what makes a bass line squelch." value={track.envAmount} defaultValue={0.2} onChange={(value) => set('envAmount', value)} accent={accent} />
         <Knob label="Pump" tip="How hard this track ducks under every kick. The master Pump knob scales all of these at once." value={track.pumpAmount} defaultValue={0} onChange={(value) => set('pumpAmount', value)} accent={accent} />
@@ -197,8 +207,8 @@ export function TrackDetail() {
         )}
       </div>
 
-      <p className="voice-note">{voice.tooltip}</p>
       <p className="value-note">Density {percent(track.density)} · Chaos {percent(track.chaos)} · Tone {percent(track.cutoff)}</p>
+      </Reveal>
     </section>
   );
 }

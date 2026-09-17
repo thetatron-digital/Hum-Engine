@@ -85,7 +85,14 @@ button, select, input { font: inherit; color: inherit; }
   justify-content: space-between;
   gap: 12px;
 }
-.app-head h1 { font-size: 19px; margin: 0; letter-spacing: -0.01em; }
+.app-head h1 {
+  font-size: 17px;
+  margin: 0;
+  letter-spacing: -0.01em;
+  /* Must not wrap to two lines once the depth switch sits beside it. */
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
 
 .status { font-size: 12px; color: var(--muted); }
 .status.is-playing { color: var(--good); }
@@ -807,3 +814,66 @@ button, select, input { font: inherit; color: inherit; }
   background: var(--text);
   border: 3px solid var(--panel);
 }
+
+/* --- Simple and Everything ---------------------------------------------- */
+
+.depth {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.depth-option {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.depth-option.is-on { background: var(--panel-2); color: var(--text); }
+
+.reveal { margin-top: 12px; }
+
+.reveal-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: var(--tap);
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reveal-chevron {
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.15s ease;
+}
+.reveal-toggle.is-open .reveal-chevron { transform: rotate(-135deg) translateY(-1px); }
+
+.reveal-body {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.strip-item.is-random {
+  border-color: var(--shift);
+  color: var(--shift);
+}
+
+.app-head-right { display: flex; align-items: center; gap: 10px; }

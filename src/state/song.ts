@@ -183,18 +183,18 @@ export interface CustomShift {
   mute: TrackId[];
 }
 
-/** Settings for the robot voice on the Vocal track. */
+/**
+ * Settings for the robot voice on the Vocal track.
+ *
+ * The words always come from a recording of your own voice. There used to be
+ * an option to type them instead, with the voice built from scratch out of a
+ * buzz and three resonances. It was honest formant synthesis and it sounded
+ * like it: crude, and not good enough to keep. The vocoder needs a real voice
+ * to work on, which is exactly how these records were actually made.
+ */
 export interface VocalSettings {
-  /**
-   * Where the words come from. 'text' builds a voice from nothing, which is
-   * unmistakably a machine. 'voice' uses a recording of you, which is far
-   * clearer and much closer to the records.
-   */
-  source: 'text' | 'voice';
   /** A vocoder is the choral robot. A talkbox is the nasal, vowel-heavy one. */
   mode: 'vocoder' | 'talkbox';
-  /** The phrase the machine says. */
-  text: string;
   /** What you called the recording, kept so a loaded song can tell you. */
   recordingName: string;
   /** More bands means clearer words, fewer means a cruder, thicker robot. */
@@ -299,10 +299,8 @@ export function createDefaultSong(): Song {
     palette: 'pentatonic',
     progression: 'circle',
     vocal: {
-      source: 'text',
       mode: 'vocoder',
       recordingName: '',
-      text: 'we are the robots',
       // Ten is what the Roland SVC-350 had, which is the vocoder on most of
       // the records this is chasing.
       bands: 10,

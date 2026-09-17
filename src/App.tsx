@@ -18,6 +18,7 @@ import { TrackChips, TrackDetail } from './ui/TrackPanel';
 import { HarmonyPanel, MasterPanel, ShiftPanel, TransportBar } from './ui/Panels';
 import { SongPanel } from './ui/SongPanel';
 import { PresetStrip } from './ui/PresetStrip';
+import { DepthSwitch } from './ui/Reveal';
 import { ExportPanel } from './ui/ExportPanel';
 import './styles.css';
 
@@ -223,7 +224,10 @@ export default function App() {
     <div className="app">
       <header className="app-head">
         <h1>Hum Engine</h1>
-        <span className={`status ${playing ? 'is-playing' : ''}`}>{playing ? 'Playing' : 'Stopped'}</span>
+        <div className="app-head-right">
+          <span className={`status ${playing ? 'is-playing' : ''}`}>{playing ? 'Playing' : 'Stopped'}</span>
+          <DepthSwitch />
+        </div>
       </header>
 
       {audioStalled && (
@@ -249,6 +253,11 @@ export default function App() {
 
       <SilenceNotice />
 
+      {/*
+        The order answers "what do I want on screen without scrolling": tap a
+        name, press play, hear something. Everything that shapes what you just
+        heard comes after it.
+      */}
       <TransportBar onPlay={play} onStop={stop} />
       <PresetStrip />
       <ShiftPanel />

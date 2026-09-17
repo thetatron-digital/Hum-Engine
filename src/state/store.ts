@@ -15,6 +15,7 @@ import { createDefaultSong, migrateSong, cloneSong } from './song';
 import { applyShift, blendSongs } from '../shift/modes';
 
 const STORAGE_KEY = 'hum-engine:song:v1';
+const SIMPLE_KEY = 'hum-engine:simple';
 
 /** A single recorded move, timed in sixteenth notes from the start of recording. */
 export interface PerformanceEvent {
@@ -57,6 +58,14 @@ interface AppState {
 
   selectedTrack: TrackId;
   showNoteNames: boolean;
+  /**
+   * Whether to show the short version of the interface.
+   *
+   * Not part of the song, because it is a preference about how you like to
+   * work rather than anything about the music, and it should not travel with a
+   * song file to somebody else's screen.
+   */
+  simple: boolean;
 
   recording: boolean;
   recordStartStep: number;
@@ -79,6 +88,7 @@ interface AppState {
   setSamplesOnline: (online: boolean) => void;
   selectTrack: (id: TrackId) => void;
   toggleNoteNames: () => void;
+  setSimple: (simple: boolean) => void;
   startRecording: () => void;
   stopRecording: () => void;
   clearPerformance: () => void;
@@ -116,6 +126,16 @@ function loadSaved(): Song {
   return createDefaultSong();
 }
 
+/** New here means new to the app, so start short. */
+function loadSimple(): boolean {
+  try {
+    const raw = localStorage.getItem(SIMPLE_KEY);
+    return raw === null ? true : raw === '1';
+  } catch {
+    return true;
+  }
+}
+
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function saveLater(song: Song): void {
   clearTimeout(saveTimer);
@@ -137,6 +157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   samplesOnline: false,
   selectedTrack: 'kick',
   showNoteNames: false,
+  simple: loadSimple(),
   recording: false,
   recordStartStep: 0,
   performance: [],
@@ -215,6 +236,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSamplesOnline: (samplesOnline) => set({ samplesOnline }),
   selectTrack: (selectedTrack) => set({ selectedTrack }),
   toggleNoteNames: () => set({ showNoteNames: !get().showNoteNames }),
+
+  setSimple: (simple) => {
+    try {
+      localStorage.setItem(SIMPLE_KEY, simple ? '1' : '0');
+    } catch {
+      // Not worth interrupting anything over.
+    }
+    set({ simple });
+  },
 
   startRecording: () =>
     set({

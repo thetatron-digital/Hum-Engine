@@ -2,7 +2,7 @@
  * The two tracks that need material from you: the robot voice and the chopper.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Tone from 'tone';
 import { useAppStore } from '../state/store';
 import { registerBuffer } from '../audio/samples';
@@ -19,6 +19,7 @@ import {
 import { Knob } from './Knob';
 import { ToggleButton } from './Controls';
 import { InfoLabel } from './Tooltip';
+import { Reveal } from './Reveal';
 
 const CLIP_KEY = 'clip:loaded';
 
@@ -31,42 +32,35 @@ export function VocalControls() {
 
   const vocal = song.vocal;
 
-  // Rebuild after a pause rather than on every keystroke, since each rebuild
-  // renders the whole phrase once per chord.
-  useEffect(() => {
-    setReady(vocalReady(song));
+  // Rebuild after a pause rather than on every knob movement, since each
+  // rebuild vocodes the whole phrase once per chord in the progression.
+  const rebuild = useCallback(() => {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       setBuilding(true);
       void renderVocals(song).then(() => {
         setBuilding(false);
-        setReady(true);
+        setReady(vocalReady(song));
       });
     }, 350);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song]);
+
+  useEffect(() => {
+    setReady(vocalReady(song));
+    rebuild();
     return () => clearTimeout(timer.current);
     // Only the things that change the sound should trigger a rebuild.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vocal.text, vocal.bands, vocal.brightness, vocal.formantShift, vocal.sibilance, song.mood, song.progression, song.tempo]);
+  }, [vocal.mode, vocal.bands, vocal.brightness, vocal.formantShift, vocal.sibilance, song.mood, song.progression]);
 
   return (
     <div className="sub-panel">
       <InfoLabel
         text="Robot voice"
-        tip="The words come from you or from a voice built out of nothing, and the pitch comes from whatever chord is playing. That is what makes the chords appear to sing."
+        tip="Record a phrase and the chords sing it. Your voice supplies the words, the chord supplies the pitch, and a vocoder puts them together. That is how these records were actually made."
         className="panel-title"
       />
-
-      <div className="bars-row">
-        <InfoLabel text="Where the words come from" tip="A recording of your own voice is much clearer and far closer to the records. Typed words are unmistakably a machine, which is sometimes exactly what you want." />
-        <div className="bars-buttons">
-          <ToggleButton on={vocal.source === 'text'} onClick={() => setParam('vocal.source', 'text')}>
-            Typed words
-          </ToggleButton>
-          <ToggleButton on={vocal.source === 'voice'} onClick={() => setParam('vocal.source', 'voice')}>
-            My voice
-          </ToggleButton>
-        </div>
-      </div>
 
       <div className="bars-row">
         <InfoLabel text="Which robot" tip="A vocoder splits your voice into a row of frequency bands and is the choral, harmonised robot. A talkbox pipes the synth through a mouth instead, giving two or three moving resonances and a much more nasal, human sound." />
@@ -80,35 +74,24 @@ export function VocalControls() {
         </div>
       </div>
 
-      {vocal.source === 'text' ? (
-        <label className="name-field">
-          <span>Phrase</span>
-          <input
-            value={vocal.text}
-            onChange={(event) => setParam('vocal.text', event.target.value)}
-            placeholder="type something for it to say"
-          />
-        </label>
-      ) : (
-        <VoiceTake onRecorded={() => setReady(false)} />
-      )}
+      <VoiceTake onRecorded={rebuild} />
 
       <p className="hint">
         {building
           ? 'Building the voice.'
           : ready
             ? 'Ready. Turn the Vocal track on to hear it.'
-            : vocal.source === 'voice'
-              ? 'Record something for it to sing.'
-              : 'Waiting for a phrase.'}
+            : 'Record a phrase for the chords to sing.'}
       </p>
 
+      <Reveal label="More voice controls">
       <div className="knob-row">
         <Knob label="Clarity" tip="How many frequency bands the voice is split into. More makes the words clearer, fewer makes it a cruder and thicker robot." value={vocal.bands} min={6} max={32} defaultValue={20} onChange={(value) => setParam('vocal.bands', Math.round(value))} format={(value) => `${Math.round(value)} bands`} />
         <Knob label="Carrier" tip="How bright the chord underneath the voice is. Right is a buzzing stack of sawtooths, left is a darker hum." value={vocal.brightness} defaultValue={0.8} onChange={(value) => setParam('vocal.brightness', value)} />
         <Knob label="Size" tip="Shifts the voice's character. Right sounds like a small robot, left sounds like an enormous one." value={vocal.formantShift} min={0.6} max={1.7} defaultValue={1} onChange={(value) => setParam('vocal.formantShift', value)} format={(value) => (value > 1.05 ? 'Smaller' : value < 0.95 ? 'Bigger' : 'Normal')} />
         <Knob label="Breath" tip="Lets some of the raw breath through, which brings back the s and t sounds. Too much and it hisses." value={vocal.sibilance} defaultValue={0.25} onChange={(value) => setParam('vocal.sibilance', value)} />
       </div>
+      </Reveal>
     </div>
   );
 }
