@@ -8,6 +8,10 @@
  * useless. So this drives the real interface, catches the real downloads, and
  * looks inside the actual WAV files.
  *
+ * It also checks the app is still playing afterwards. Rendering has to stop
+ * playback while it runs, which means it has to start it again, and an export
+ * that leaves the app permanently silent is a worse bug than one that fails.
+ *
  *   npm run build && npm run preview &
  *   npm run check:export
  */
@@ -91,10 +95,32 @@ const status = await page.evaluate(
   () => [...document.querySelectorAll('.hint')].map((el) => el.textContent).find((t) => /Done\.|failed|silent/i.test(t || '')),
 );
 await page.waitForTimeout(2500);
+
+// Playback is stopped for the duration of a render and has to come back.
+const afterExport = await page.evaluate(async () => {
+  const Tone = window.__tone;
+  const analyser = Tone.getContext().createAnalyser();
+  analyser.fftSize = 2048;
+  Tone.getDestination().connect(analyser);
+  const data = new Float32Array(analyser.fftSize);
+  let peak = 0;
+  const started = performance.now();
+  while (performance.now() - started < 3000) {
+    analyser.getFloatTimeDomainData(data);
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return {
+    peak: +peak.toFixed(4),
+    transport: Tone.getTransport().state,
+    status: document.querySelector('.status')?.textContent ?? null,
+  };
+});
+
 await browser.close();
 
 const inspected = files.map((file) => ({ name: file.name, ...inspectWav(file.path) }));
-console.log(JSON.stringify({ status, errors, files: inspected }, null, 2));
+console.log(JSON.stringify({ status, afterExport, errors, files: inspected }, null, 2));
 
 // --- assertions ---
 const problems = [];
@@ -115,10 +141,16 @@ for (const stem of stems) {
 // Stems that are byte-identical to the mix mean the channels were folded down.
 const suspicious = stems.filter((s) => mix && Math.abs(s.rms - mix.rms) < 1e-6);
 if (suspicious.length) problems.push(`these stems look like copies of the mix: ${suspicious.map((s) => s.name).join(', ')}`);
+if (afterExport.transport !== 'started') {
+  problems.push(`playback did not resume after the export (transport is "${afterExport.transport}")`);
+}
+if (afterExport.peak < 0.01) {
+  problems.push(`the app is silent after exporting (peak ${afterExport.peak})`);
+}
 if (errors.length) problems.push(`page errors: ${errors.join('; ')}`);
 
 if (problems.length) {
   console.error('\nFAILED:\n  ' + problems.join('\n  '));
   process.exit(1);
 }
-console.log('\nExport looks correct.');
+console.log(`\nExport looks correct, and the app is still playing afterwards (peak ${afterExport.peak}).`);

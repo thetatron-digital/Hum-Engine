@@ -71,6 +71,7 @@ export class Engine {
   private compressor!: Tone.Compressor;
   private limiter!: Tone.Limiter;
   private masterGain!: Tone.Gain;
+  private meter!: Tone.Meter;
   private reverb!: Tone.Reverb;
   private delay!: Tone.FeedbackDelay;
 
@@ -152,12 +153,16 @@ export class Engine {
     this.compressor = new Tone.Compressor({ threshold: -16, ratio: 4, attack: 0.006, release: 0.16 });
     this.limiter = new Tone.Limiter(-1);
     this.masterGain = new Tone.Gain(0.85);
+    // Tapped off the very end of the chain, so it reports what actually leaves
+    // the app rather than what the settings suggest should.
+    this.meter = new Tone.Meter({ normalRange: true, smoothing: 0.2 });
 
     this.reverb = new Tone.Reverb({ decay: 2.4, preDelay: 0.02, wet: 1 });
     this.delay = new Tone.FeedbackDelay({ delayTime: 0.25, feedback: 0.3, wet: 1 });
 
     this.bus.chain(this.crush, this.drive, this.highpass, this.lowpass, this.compressor, this.limiter, this.masterGain);
     this.masterGain.connect(destination);
+    this.masterGain.connect(this.meter);
     this.reverb.connect(this.fxReturn);
     this.delay.connect(this.fxReturn);
     this.fxReturn.connect(this.drive);
@@ -213,6 +218,12 @@ export class Engine {
     return this.masterGain;
   }
 
+  /** How loud the output is right now, 0 to 1. */
+  outputLevel(): number {
+    const value = this.meter.getValue();
+    return typeof value === 'number' ? value : value[0] ?? 0;
+  }
+
   /** The shared reverb and delay returns, exported as their own stem. */
   fxTap(): Tone.Gain {
     return this.fxReturn;
@@ -266,7 +277,7 @@ export class Engine {
       chain.delaySend.dispose();
     }
     this.chains.clear();
-    for (const node of [this.bus, this.fxReturn, this.crush, this.drive, this.highpass, this.lowpass, this.compressor, this.limiter, this.masterGain, this.reverb, this.delay]) {
+    for (const node of [this.bus, this.fxReturn, this.crush, this.drive, this.highpass, this.lowpass, this.compressor, this.limiter, this.masterGain, this.meter, this.reverb, this.delay]) {
       node.dispose();
     }
   }

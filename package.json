@@ -13,8 +13,11 @@
     "check:export": "node scripts/export-check.mjs",
     "check:hum": "node scripts/hum-check.mjs",
     "check:pitch": "node scripts/pitch-check.mjs",
-    "check": "npm run check:vocal && npm run smoke && npm run check:pitch && npm run check:hum && npm run check:presets && npm run check:export",
-    "check:presets": "node scripts/presets-check.mjs"
+    "check": "npm run check:vocal && npm run smoke && npm run check:knobs && npm run check:pitch && npm run check:hum && npm run check:presets && npm run check:upgrade && npm run check:silence && npm run check:export",
+    "check:presets": "node scripts/presets-check.mjs",
+    "check:upgrade": "node scripts/upgrade-check.mjs",
+    "check:silence": "node scripts/silence-check.mjs",
+    "check:knobs": "node scripts/knob-check.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

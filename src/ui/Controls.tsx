@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { InfoLabel } from './Tooltip';
 
 export interface Option {
@@ -67,7 +68,7 @@ export function Picker({
       </button>
       {current?.tip && <p className="picker-tip">{current.tip}</p>}
 
-      {open && (
+      {open && createPortal(
         <div className="sheet-backdrop" onClick={() => setOpen(false)}>
           <div
             className="sheet"
@@ -104,7 +105,10 @@ export function Picker({
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        // Into the body, so an ancestor with a backdrop blur cannot become the
+        // reference for this sheet's fixed positioning.
+        document.body,
       )}
     </div>
   );

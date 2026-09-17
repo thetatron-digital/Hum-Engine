@@ -4,6 +4,7 @@
 
 import { useRef, useState } from 'react';
 import { useAppStore, currentShiftBlend } from '../state/store';
+import { restoreSound } from '../state/diagnose';
 import { MOOD_LIST, PALETTES } from '../music/moods';
 import type { PaletteId } from '../music/moods';
 import { PROGRESSIONS } from '../music/progressions';
@@ -78,6 +79,8 @@ export function MasterPanel() {
   const master = useAppStore((state) => state.song.master);
   const swing = useAppStore((state) => state.song.swing);
   const setParam = useAppStore((state) => state.setParam);
+  const song = useAppStore((state) => state.song);
+  const setSong = useAppStore((state) => state.setSong);
   const set = (key: string, value: number) => setParam(`master.${key}`, value);
 
   return (
@@ -100,6 +103,22 @@ export function MasterPanel() {
         <Knob label="Swing" tip="Pushes every other sixteenth note late, which makes a stiff machine pattern feel human." value={swing} defaultValue={0} onChange={(value) => setParam('swing', value)} />
         <Knob label="Volume" tip="Overall output level." value={master.volume} defaultValue={0.85} onChange={(value) => set('volume', value)} />
       </div>
+
+      {/*
+        Always reachable, not only when something can be diagnosed. Any of
+        these knobs can be turned down to nothing and the result is saved as
+        you go, so there has to be a way back that does not mean hunting for
+        which one it was.
+      */}
+      <div className="button-row">
+        <button type="button" className="wide-button" onClick={() => setSong(restoreSound(song))}>
+          Restore sound settings
+        </button>
+      </div>
+      <p className="hint">
+        Puts the volume, the sweeps and the mute switches back to sensible values. Your voices,
+        patterns, melody shapes and mood are left exactly as they are.
+      </p>
     </section>
   );
 }
