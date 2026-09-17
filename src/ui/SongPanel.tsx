@@ -9,6 +9,7 @@ import { useRef, useState } from 'react';
 import { useAppStore, exportSongJson } from '../state/store';
 import { migrateSong } from '../state/song';
 import { PRESET_LIST, loadPreset } from '../state/presets';
+import { listUserPresets, saveUserPreset, deleteUserPreset, type SavedPreset } from '../state/userPresets';
 import { randomSong } from '../music/generate';
 import { MOOD_LIST } from '../music/moods';
 import { GENRES, type GenreId } from '../music/patterns';
@@ -23,6 +24,7 @@ export function SongPanel() {
   const [mood, setMood] = useState<MoodId>('euphoric');
   const [genre, setGenre] = useState<GenreId>('french');
   const [message, setMessage] = useState('');
+  const [saved, setSaved] = useState<SavedPreset[]>(() => listUserPresets());
   const fileInput = useRef<HTMLInputElement>(null);
 
   const download = () => {
@@ -72,6 +74,37 @@ export function SongPanel() {
         ))}
       </div>
 
+      {saved.length > 0 && (
+        <>
+          <InfoLabel text="Your own" tip="Songs you saved. Kept in this browser, and identical to the song files you can download." />
+          <div className="preset-list">
+            {saved.map((preset) => (
+              <div key={preset.id} className="preset-row">
+                <button
+                  type="button"
+                  className="preset"
+                  onClick={() => {
+                    setSong(preset.song);
+                    setMessage(`Loaded ${preset.name}.`);
+                  }}
+                >
+                  <strong>{preset.name}</strong>
+                  <span>Saved {new Date(preset.savedAt).toLocaleDateString()}</span>
+                </button>
+                <button
+                  type="button"
+                  className="preset-delete"
+                  aria-label={`Delete ${preset.name}`}
+                  onClick={() => setSaved(deleteUserPreset(preset.id))}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
       <div className="row">
         <Picker
           label="Feeling"
@@ -99,6 +132,16 @@ export function SongPanel() {
           }}
         >
           Random song
+        </button>
+        <button
+          type="button"
+          className="wide-button"
+          onClick={() => {
+            setSaved(saveUserPreset(song, song.name));
+            setMessage(`Saved ${song.name || 'Untitled'} as a preset.`);
+          }}
+        >
+          Save as preset
         </button>
         <button type="button" className="wide-button" onClick={download}>
           Download song file

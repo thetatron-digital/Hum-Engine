@@ -14,6 +14,7 @@ import * as Tone from 'tone';
 import type { SynthKind, VoiceDef } from './voiceCatalog';
 import { midiToFrequency } from '../music/moods';
 import { cachedBuffer, dirtUrl, instrumentSampler, loadBuffer } from './samples';
+import { addWorkletModule, workletLoaded } from './worklets';
 
 export interface TriggerOptions {
   /** A single note, for monophonic voices. */
@@ -57,28 +58,24 @@ function chordFrequencies(options: TriggerOptions): number[] {
 // ---------------------------------------------------------------------------
 
 const workletUrl = new URL('./hardsync-processor.js', import.meta.url);
-const registeredContexts = new WeakSet<BaseAudioContext>();
 
 /**
- * Register the hard sync processor with a context. Has to happen again for the
- * offline context used by the export, which is why this takes a context rather
- * than assuming the live one.
+ * Register the hard sync processor with a context.
+ *
+ * Always go through Tone's own context rather than reaching for the underlying
+ * browser one. Tone wraps the real audio context, and the wrapper is not
+ * something the browser's own constructors will accept, so building worklet
+ * nodes by hand fails. Tone's factory methods know how to unwrap it.
+ *
+ * This has to run again for the offline context used by the export, because a
+ * worklet belongs to exactly one context.
  */
-export async function registerWorklets(context: BaseAudioContext): Promise<boolean> {
-  if (registeredContexts.has(context)) return true;
-  const target = context as BaseAudioContext & { audioWorklet?: AudioWorklet };
-  if (!target.audioWorklet) return false;
-  try {
-    await target.audioWorklet.addModule(workletUrl.href);
-    registeredContexts.add(context);
-    return true;
-  } catch {
-    return false;
-  }
+export async function registerWorklets(context: Tone.BaseContext): Promise<boolean> {
+  return addWorkletModule(context, workletUrl.href);
 }
 
-export function hasWorklet(context: BaseAudioContext): boolean {
-  return registeredContexts.has(context);
+export function hasWorklet(context: Tone.BaseContext): boolean {
+  return workletLoaded(context, workletUrl.href);
 }
 
 // ---------------------------------------------------------------------------
@@ -335,7 +332,7 @@ function makeAcid(): Voice {
  * filter if the browser will not give us an AudioWorklet, which is close in
  * spirit but noticeably tamer.
  */
-function makeTear(context: BaseAudioContext): Voice {
+function makeTear(context: Tone.BaseContext): Voice {
   if (!hasWorklet(context)) {
     const synth = new Tone.MonoSynth({
       oscillator: { type: 'fatsquare', count: 3, spread: 40 },
@@ -358,7 +355,7 @@ function makeTear(context: BaseAudioContext): Voice {
     };
   }
 
-  const node = new AudioWorkletNode(context, 'hard-sync', {
+  const node = context.createAudioWorkletNode('hard-sync', {
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [1],
@@ -753,7 +750,7 @@ function makePiano(): Voice {
 // Factory
 // ---------------------------------------------------------------------------
 
-function buildKind(kind: SynthKind, def: VoiceDef, context: BaseAudioContext): Voice {
+function buildKind(kind: SynthKind, def: VoiceDef, context: Tone.BaseContext): Voice {
   switch (kind) {
     case 'kick': return makeKick(def);
     case 'snare': return makeSnare();
@@ -778,9 +775,10 @@ function buildKind(kind: SynthKind, def: VoiceDef, context: BaseAudioContext): V
     case 'noise': return makeNoise();
     case 'riser': return makeRiser();
     case 'boom': return makeBoom();
-    // The robot voice needs the vocoder, which is built on top of a chord
-    // carrier. Until that arrives it sings through the choir.
-    case 'vocoder': return makeChoir();
+    // The robot voice plays phrases that were vocoded ahead of time and handed
+    // over as buffers. Until the first one is ready the chord sings wordlessly
+    // through the choir, which is less startling than silence.
+    case 'vocoder': return makeSampler({ ...def, sampleBank: undefined }, makeChoir());
     case 'sampler': {
       const fallback = buildKind(def.fallback ?? 'pluck', { ...def, kind: def.fallback ?? 'pluck' }, context);
       return makeSampler(def, fallback);
@@ -789,6 +787,6 @@ function buildKind(kind: SynthKind, def: VoiceDef, context: BaseAudioContext): V
   }
 }
 
-export function createVoice(def: VoiceDef, context: BaseAudioContext): Voice {
+export function createVoice(def: VoiceDef, context: Tone.BaseContext): Voice {
   return buildKind(def.kind, def, context);
 }

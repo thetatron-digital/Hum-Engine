@@ -435,3 +435,150 @@ button, select, input { font: inherit; color: inherit; }
 .preset span { color: var(--muted); font-size: 12px; }
 
 .app-foot { padding-top: 6px; }
+
+/* --- Hum to melody ------------------------------------------------------ */
+
+.hum-panel { border-top-color: var(--good); }
+.hum-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.hum-button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 14px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--good);
+  background: rgba(77, 208, 167, 0.08);
+  color: var(--good);
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.warn-box {
+  background: rgba(255, 159, 67, 0.1);
+  border: 1px solid rgba(255, 159, 67, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.record-button {
+  flex: 1;
+  min-height: 56px;
+  margin-top: 12px;
+  border-radius: var(--radius);
+  border: none;
+  background: var(--good);
+  color: #05140f;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.record-button:disabled { opacity: 0.45; cursor: default; }
+
+.count-in { text-align: center; padding: 20px 0; }
+.count-in span { font-size: 64px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.recording { text-align: center; padding: 12px 0; }
+.record-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--pump);
+  margin: 0 auto 8px;
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.3; transform: scale(0.8); } }
+
+.level-meter { height: 8px; border-radius: 999px; background: #222a3c; margin: 10px 0; overflow: hidden; }
+.level-fill { height: 100%; background: var(--good); }
+
+.note-roll {
+  position: relative;
+  height: 190px;
+  margin-top: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #11151f;
+  overflow: hidden;
+}
+.note-roll.is-empty { display: grid; place-items: center; color: var(--muted); font-size: 13px; height: 100px; }
+
+.roll-beat { position: absolute; top: 0; bottom: 0; width: 1px; background: #1e2534; }
+
+.roll-note {
+  position: absolute;
+  border: none;
+  border-radius: 4px;
+  background: var(--good);
+  padding: 0;
+  min-height: 12px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  color: #05140f;
+  font-weight: 700;
+  overflow: hidden;
+}
+.roll-note.is-selected { outline: 2px solid var(--text); z-index: 2; }
+
+.sub-panel {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #11151f;
+}
+
+/* --- Preset strip ------------------------------------------------------- */
+
+.strip { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.strip-label { color: var(--muted); font-size: 12px; font-weight: 600; flex: 0 0 auto; }
+
+.strip-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.strip-scroll::-webkit-scrollbar { display: none; }
+
+.strip-item {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.strip-item.is-on { border-color: var(--accent); color: var(--text); }
+.strip-item.is-mine { border-style: dashed; }
+
+.preset-row { display: flex; gap: 8px; align-items: stretch; }
+.preset-row .preset { flex: 1; }
+
+.preset-delete {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* A standalone record button fills its panel; inside a row of buttons it
+   shares the space instead. */
+.record-button { width: 100%; }
+.button-row .record-button { width: auto; flex: 1 1 160px; margin-top: 0; }

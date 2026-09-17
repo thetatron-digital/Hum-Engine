@@ -61,6 +61,11 @@ interface AppState {
   recording: boolean;
   recordStartStep: number;
   performance: PerformanceEvent[];
+  /**
+   * The song exactly as it stood when recording began. Replaying the events on
+   * top of this is what reconstructs the performance later.
+   */
+  recordBaseSong: Song | null;
 
   setSong: (song: Song) => void;
   setParam: (path: string, value: ParamValue) => void;
@@ -135,6 +140,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   recording: false,
   recordStartStep: 0,
   performance: [],
+  recordBaseSong: null,
 
   setSong: (song) => {
     saveLater(song);
@@ -205,9 +211,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectTrack: (selectedTrack) => set({ selectedTrack }),
   toggleNoteNames: () => set({ showNoteNames: !get().showNoteNames }),
 
-  startRecording: () => set({ recording: true, recordStartStep: get().position, performance: [] }),
+  startRecording: () =>
+    set({
+      recording: true,
+      recordStartStep: get().position,
+      performance: [],
+      recordBaseSong: cloneSong(get().song),
+    }),
   stopRecording: () => set({ recording: false }),
-  clearPerformance: () => set({ performance: [] }),
+  clearPerformance: () => set({ performance: [], recordBaseSong: null }),
 }));
 
 /** How far through a Shift we are right now, 0 is home and 1 is fully shifted. */

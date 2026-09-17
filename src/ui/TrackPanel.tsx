@@ -10,7 +10,10 @@ import { useAppStore } from '../state/store';
 import { TRACK_LABELS, TRACK_ORDER, TRACK_ROLE, isMelodic, type TrackId } from '../state/song';
 import { getPattern, patternsForRole } from '../music/patterns';
 import { voicesForRole, getVoice } from '../audio/voiceCatalog';
+import { useState } from 'react';
 import { Knob, percent } from './Knob';
+import { HumPanel } from './HumPanel';
+import { ClipControls, VocalControls } from './ClipPanel';
 import { Picker, StepGrid, ToggleButton } from './Controls';
 import { InfoLabel } from './Tooltip';
 
@@ -63,6 +66,7 @@ export function TrackChips() {
 }
 
 export function TrackDetail() {
+  const [humming, setHumming] = useState(false);
   const id = useAppStore((state) => state.selectedTrack);
   const track = useAppStore((state) => state.song.tracks[id]);
   const setParam = useAppStore((state) => state.setParam);
@@ -83,6 +87,10 @@ export function TrackDetail() {
     setParam(`tracks.${id}.pattern.steps`, next);
     setParam(`tracks.${id}.pattern.source`, 'grid');
   };
+
+  if (humming && melodic) {
+    return <HumPanel trackId={id} onClose={() => setHumming(false)} />;
+  }
 
   return (
     <section className="panel track-detail" style={{ borderTopColor: accent }}>
@@ -123,6 +131,15 @@ export function TrackDetail() {
           ]}
         />
       </div>
+
+      {id === 'vocal' && <VocalControls />}
+      {id === 'chop' && <ClipControls />}
+
+      {melodic && (
+        <button type="button" className="hum-button" onClick={() => setHumming(true)}>
+          Hum a melody into this track
+        </button>
+      )}
 
       <div className="grid-block">
         <div className="grid-head">

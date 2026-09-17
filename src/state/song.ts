@@ -171,6 +171,32 @@ export interface CustomShift {
   mute: TrackId[];
 }
 
+/** Settings for the robot voice on the Vocal track. */
+export interface VocalSettings {
+  /** The phrase the machine says. */
+  text: string;
+  /** More bands means clearer words, fewer means a cruder, thicker robot. */
+  bands: number;
+  /** How bright the chord underneath the voice is. */
+  brightness: number;
+  /** Shifts the voice's character. Up sounds smaller, down sounds enormous. */
+  formantShift: number;
+  /** Lets some of the raw breath through, which brings back the s and t sounds. */
+  sibilance: number;
+}
+
+/** A clip you loaded, and how the Sample Chop track cuts it up. */
+export interface ClipSettings {
+  /** The file name, kept so a reloaded song can tell you what to find again. */
+  name: string;
+  /** How many equal pieces the clip is divided into. */
+  slices: number;
+  /** Put each slice in key with the current mood. */
+  pitchLock: boolean;
+  /** How often a slice plays backwards. */
+  reverseChance: number;
+}
+
 export interface Song {
   version: number;
   name: string;
@@ -190,8 +216,8 @@ export interface Song {
   master: MasterSettings;
   tracks: Record<TrackId, Track>;
   shift: ShiftSettings;
-  /** Typed phrase for the robot voice. */
-  vocalText: string;
+  vocal: VocalSettings;
+  clip: ClipSettings;
 }
 
 export const DEFAULT_CUSTOM_SHIFT: CustomShift = {
@@ -245,7 +271,19 @@ export function createDefaultSong(): Song {
     timeFeel: 1,
     mood: 'euphoric',
     progression: 'circle',
-    vocalText: 'we are the robots',
+    vocal: {
+      text: 'we are the robots',
+      bands: 20,
+      brightness: 0.8,
+      formantShift: 1,
+      sibilance: 0.25,
+    },
+    clip: {
+      name: '',
+      slices: 16,
+      pitchLock: true,
+      reverseChance: 0,
+    },
     master: {
       pump: 0.55,
       pumpRelease: 0.65,
@@ -337,6 +375,8 @@ export function migrateSong(input: unknown): Song {
     ...base,
     ...raw,
     master: { ...base.master, ...(raw.master ?? {}) },
+    vocal: { ...base.vocal, ...(raw.vocal ?? {}) },
+    clip: { ...base.clip, ...(raw.clip ?? {}) },
     shift: {
       ...base.shift,
       ...(raw.shift ?? {}),

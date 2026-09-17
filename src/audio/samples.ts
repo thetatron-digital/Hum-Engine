@@ -149,56 +149,65 @@ export const INSTRUMENTS: Record<string, InstrumentDef> = {
   },
 };
 
-const samplers = new Map<string, Tone.Sampler | null>();
-const samplerLoads = new Map<string, Promise<Tone.Sampler | null>>();
-
 /**
- * Build a sampler for one instrument. Resolves null if the files cannot be
- * fetched, which the calling voice treats as "stay on the synth".
+ * Note that what is cached is the decoded audio, not the Sampler.
+ *
+ * A Tone node belongs to the audio context it was built on, and the offline
+ * export runs on a different context. Decoded audio has no such attachment, so
+ * caching the buffers and building a fresh Sampler each time is what lets the
+ * orchestral instruments appear in an exported file at all.
  */
-export function instrumentSampler(name: string): Promise<Tone.Sampler | null> {
-  if (samplers.has(name)) return Promise.resolve(samplers.get(name) ?? null);
-  const existing = samplerLoads.get(name);
+const instrumentBuffers = new Map<string, Record<string, Tone.ToneAudioBuffer> | null>();
+const instrumentLoads = new Map<string, Promise<Record<string, Tone.ToneAudioBuffer> | null>>();
+
+function loadInstrumentBuffers(name: string): Promise<Record<string, Tone.ToneAudioBuffer> | null> {
+  if (instrumentBuffers.has(name)) return Promise.resolve(instrumentBuffers.get(name) ?? null);
+  const existing = instrumentLoads.get(name);
   if (existing) return existing;
 
   const def = INSTRUMENTS[name];
   if (!def) return Promise.resolve(null);
 
-  const task = new Promise<Tone.Sampler | null>((resolve) => {
-    let settled = false;
-    const finish = (value: Tone.Sampler | null) => {
-      if (settled) return;
-      settled = true;
-      samplers.set(name, value);
-      resolve(value);
-    };
-    // A slow phone on a bad connection should not hold the orchestral Shift
-    // hostage forever, so give up after a while and use the synth.
-    const timeout = setTimeout(() => finish(null), 15000);
-    try {
-      const sampler = new Tone.Sampler({
-        urls: def.files,
-        baseUrl: def.baseUrl,
-        onload: () => {
-          clearTimeout(timeout);
-          finish(sampler);
-        },
-        onerror: () => {
-          clearTimeout(timeout);
-          finish(null);
-        },
-      });
-    } catch {
-      clearTimeout(timeout);
-      finish(null);
-    }
-  }).finally(() => samplerLoads.delete(name));
+  const task = (async () => {
+    const entries = await Promise.all(
+      Object.entries(def.files).map(async ([note, file]) => {
+        const buffer = await loadBuffer(def.baseUrl + file);
+        return [note, buffer] as const;
+      }),
+    );
+    const usable: Record<string, Tone.ToneAudioBuffer> = {};
+    for (const [note, buffer] of entries) if (buffer) usable[note] = buffer;
+    // A couple of missing notes is survivable, a mostly empty set is not.
+    const result = Object.keys(usable).length >= 3 ? usable : null;
+    instrumentBuffers.set(name, result);
+    return result;
+  })().finally(() => instrumentLoads.delete(name));
 
-  samplerLoads.set(name, task);
+  instrumentLoads.set(name, task);
   return task;
+}
+
+/**
+ * Build a sampler for one instrument on the current context. Resolves null if
+ * the files cannot be fetched, which the calling voice treats as "stay on the
+ * synth".
+ */
+export async function instrumentSampler(name: string): Promise<Tone.Sampler | null> {
+  const buffers = await loadInstrumentBuffers(name);
+  if (!buffers) return null;
+  try {
+    return new Tone.Sampler({ urls: buffers });
+  } catch {
+    return null;
+  }
+}
+
+/** Whether an instrument's audio is already in memory, with no waiting. */
+export function instrumentLoaded(name: string): boolean {
+  return Boolean(instrumentBuffers.get(name));
 }
 
 /** Start fetching the orchestral instruments so the Shift is ready when tapped. */
 export function warmOrchestralSamples(): void {
-  for (const name of Object.keys(INSTRUMENTS)) void instrumentSampler(name);
+  for (const name of Object.keys(INSTRUMENTS)) void loadInstrumentBuffers(name);
 }

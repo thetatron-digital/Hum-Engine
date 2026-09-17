@@ -15,8 +15,9 @@
 import * as Tone from 'tone';
 import type { Song, TrackId, Track } from '../state/song';
 import { TRACK_ORDER, TRACK_ROLE, isMelodic } from '../state/song';
-import { MOODS } from '../music/moods';
-import { getProgression, chordAtBar, voiceChordWide } from '../music/progressions';
+import { MOODS, degreeToMidi } from '../music/moods';
+import { getProgression, chordAtBar, chordIndexAtBar, voiceChordWide } from '../music/progressions';
+import { vocalKey } from '../vocal/render';
 import { getPattern, resolveSteps } from '../music/patterns';
 import { rngAt } from '../music/rng';
 import { getVoice } from './voiceCatalog';
@@ -49,7 +50,7 @@ export interface EngineHooks {
 }
 
 export class Engine {
-  private context: BaseAudioContext;
+  private context: Tone.BaseContext;
   private transport: ReturnType<typeof Tone.getTransport>;
   private chains = new Map<TrackId, TrackChain>();
   private repeatId: number | null = null;
@@ -69,18 +70,48 @@ export class Engine {
   /** Recomputed patterns are cached per bar so chaos is not re-rolled 16 times. */
   private stepCache = new Map<string, number[]>();
 
+  /**
+   * The last value written to each parameter.
+   *
+   * The loop runs sixteen times a bar and almost nothing changes between one
+   * step and the next, so writing every parameter every step is wasted work.
+   * For some of them it is worse than wasted: setting the reverb size rebuilds
+   * its impulse response, and setting the drive rebuilds its curve. Worst of
+   * all, during an offline render the clock does not advance between steps, so
+   * repeatedly writing the same automation point throws.
+   */
+  private lastWritten = new Map<string, number>();
+
+  /** Write a parameter only when the value has actually moved. */
+  private rampIfChanged(
+    param: { rampTo: (value: number, time: number, startTime?: number) => void },
+    key: string,
+    value: number,
+    time: number,
+    over = 0.04,
+  ): void {
+    if (this.lastWritten.get(key) === value) return;
+    this.lastWritten.set(key, value);
+    param.rampTo(value, over, time);
+  }
+
+  private setIfChanged(key: string, value: number, apply: (value: number) => void): void {
+    if (this.lastWritten.get(key) === value) return;
+    this.lastWritten.set(key, value);
+    apply(value);
+  }
+
   /** Supplies the song to play. Swapped out by the offline export. */
   songAt: (step: number) => Song;
   hooks: EngineHooks = {};
 
-  /** The clip loaded into the Sample Chop track, if any. */
-  chopBufferKey: string | null = null;
-  chopSliceCount = 16;
+  /** Where the clip you loaded lives in the buffer cache, if you loaded one. */
+  clipKey: string | null = null;
 
   constructor(
     songAt: (step: number) => Song,
     destination: Tone.ToneAudioNode,
-    context: BaseAudioContext,
+    context: Tone.BaseContext,
     transport: ReturnType<typeof Tone.getTransport>,
   ) {
     this.songAt = songAt;
@@ -156,8 +187,32 @@ export class Engine {
     return this.masterGain;
   }
 
+  /** The shared reverb and delay returns, exported as their own stem. */
+  fxTap(): Tone.Gain {
+    return this.fxReturn;
+  }
+
   ensureAllChains(song: Song): void {
     for (const id of TRACK_ORDER) this.chainFor(id, song.tracks[id]);
+    // Set the starting tempo here rather than on the first step. The
+    // transport's tempo keeps a timeline that insists every entry is later
+    // than the last, and it already holds an entry at time zero, so writing
+    // another one at time zero from inside the first step throws. Setting it
+    // before the transport runs replaces that entry cleanly instead.
+    this.transport.bpm.value = song.tempo;
+    this.lastWritten.set('tempo', song.tempo);
+  }
+
+  /**
+   * Wait for anything that has to be built before the first sound.
+   *
+   * The reverb builds its impulse response asynchronously. Live that is
+   * invisible, because the first bar arrives well after it finishes. An
+   * offline render is faster than real time and would start without it, so the
+   * exported file would have no reverb on it at all.
+   */
+  async ready(): Promise<void> {
+    await this.reverb.ready;
   }
 
   start(): void {
@@ -331,22 +386,46 @@ export class Engine {
       else options.midi = notes[0];
       options.sync = track.syncAmount;
     } else if (id === 'chop') {
-      if (!this.chopBufferKey) return;
-      options.bufferKey = this.chopBufferKey;
-      options.sliceCount = this.chopSliceCount;
+      if (!this.clipKey) return;
+      const slices = Math.max(1, Math.round(song.clip.slices));
+      options.bufferKey = this.clipKey;
+      options.sliceCount = slices;
       // Which slice plays is a stable choice per position, so the chop is a
       // repeatable part rather than noise that changes every loop.
       const roll = rngAt(song.seed, id, hit.index, 'slice');
-      options.slice = track.chaos > 0.02
-        ? Math.floor(roll * this.chopSliceCount)
-        : hit.index % this.chopSliceCount;
-      options.reverse = rngAt(song.seed, id, hit.index, 'rev') < track.chaos * 0.3;
+      options.slice = track.chaos > 0.02 ? Math.floor(roll * slices) : hit.index % slices;
+      options.reverse =
+        rngAt(song.seed, id, hit.index, 'rev') < song.clip.reverseChance + track.chaos * 0.2;
+      if (song.clip.pitchLock) options.midi = this.clipPitch(song, hit.index);
+    } else if (id === 'vocal') {
+      // Which rendering of the phrase to use: the one built for the chord in
+      // this bar, so the robot follows the harmony.
+      const progression = getProgression(song.progression);
+      const bar = Math.floor(hit.index / 16);
+      options.bufferKey = vocalKey(song, chordIndexAtBar(progression, bar));
     } else if (id === 'fx') {
       options.duration = Math.max(duration, sixteenthSeconds * 8);
     }
 
     this.applyFilterEnvelope(chain, track, time, duration);
     chain.voice.trigger(time, options);
+  }
+
+  /**
+   * A pitch for a chopped slice that agrees with the current chord.
+   *
+   * Middle C means "play the clip at its recorded speed", so the offset is
+   * measured from the mood's home note rather than being an absolute pitch.
+   * That keeps a chopped vocal close to how it was recorded while still
+   * locking it to the key.
+   */
+  private clipPitch(song: Song, index: number): number {
+    const mood = MOODS[song.mood];
+    const progression = getProgression(song.progression);
+    const chord = chordAtBar(mood, progression, Math.floor(index / 16), 5);
+    const home = degreeToMidi(mood, 0, 5);
+    const note = chord.notes[index % chord.notes.length];
+    return 60 + (note - home);
   }
 
   /**
@@ -410,29 +489,36 @@ export class Engine {
 
   private applyMaster(song: Song, time: number): void {
     const master = song.master;
-    this.transport.bpm.value = song.tempo;
+    this.setIfChanged('tempo', song.tempo, (value) => this.transport.bpm.setValueAtTime(value, time));
     // Short ramps rather than jumps, so dragging a knob sweeps instead of
     // stepping audibly.
-    this.lowpass.frequency.rampTo(cutoffToHz(master.lowpass), 0.03, time);
-    this.highpass.frequency.rampTo(20 + master.highpass * master.highpass * 1400, 0.03, time);
-    this.drive.wet.rampTo(Math.min(1, master.drive * 1.4), 0.05, time);
-    this.drive.distortion = 0.05 + master.drive * 0.75;
-    this.masterGain.gain.rampTo(master.volume, 0.05, time);
-    this.reverb.decay = 0.4 + master.reverbSize * 7;
-    this.delay.delayTime.rampTo((60 / song.tempo) * master.delayTime, 0.1, time);
-    this.delay.feedback.rampTo(Math.min(0.92, master.delayFeedback), 0.05, time);
+    this.rampIfChanged(this.lowpass.frequency, 'lp', cutoffToHz(master.lowpass), time, 0.03);
+    this.rampIfChanged(this.highpass.frequency, 'hp', 20 + master.highpass * master.highpass * 1400, time, 0.03);
+    this.rampIfChanged(this.drive.wet, 'driveWet', Math.min(1, master.drive * 1.4), time, 0.05);
+    this.rampIfChanged(this.masterGain.gain, 'vol', master.volume, time, 0.05);
+    this.rampIfChanged(this.delay.delayTime, 'delayTime', (60 / song.tempo) * master.delayTime, time, 0.1);
+    this.rampIfChanged(this.delay.feedback, 'delayFb', Math.min(0.92, master.delayFeedback), time, 0.05);
+    // These two rebuild a buffer or a curve when written, so they are only
+    // touched when the knob has genuinely moved.
+    this.setIfChanged('distortion', 0.05 + master.drive * 0.75, (value) => { this.drive.distortion = value; });
+    this.setIfChanged('decay', 0.4 + master.reverbSize * 7, (value) => { this.reverb.decay = value; });
   }
 
   private applyTrack(chain: TrackChain, track: Track, song: Song, time: number): void {
     const anySolo = TRACK_ORDER.some((id) => song.tracks[id].solo);
     const audible = track.enabled && !track.muted && (!anySolo || track.solo);
-    chain.filter.Q.rampTo(resonanceToQ(track.resonance), 0.05, time);
-    chain.panner.pan.rampTo(track.pan, 0.05, time);
-    chain.level.gain.rampTo(audible ? track.volume : 0, 0.04, time);
-    chain.reverbSend.gain.rampTo(track.reverbSend, 0.05, time);
-    chain.delaySend.gain.rampTo(track.delaySend, 0.05, time);
+    const id = track.id;
+    this.rampIfChanged(chain.filter.Q, `${id}.q`, resonanceToQ(track.resonance), time, 0.05);
+    this.rampIfChanged(chain.panner.pan, `${id}.pan`, track.pan, time, 0.05);
+    this.rampIfChanged(chain.level.gain, `${id}.vol`, audible ? track.volume : 0, time, 0.04);
+    this.rampIfChanged(chain.reverbSend.gain, `${id}.rev`, track.reverbSend, time, 0.05);
+    this.rampIfChanged(chain.delaySend.gain, `${id}.dly`, track.delaySend, time, 0.05);
     if (track.envAmount <= 0.01) {
-      chain.filter.frequency.rampTo(cutoffToHz(track.cutoff), 0.04, time);
+      this.rampIfChanged(chain.filter.frequency, `${id}.cut`, cutoffToHz(track.cutoff), time, 0.04);
+    } else {
+      // The envelope is driving this filter, so forget the resting value:
+      // otherwise turning the envelope back down would not restore it.
+      this.lastWritten.delete(`${id}.cut`);
     }
   }
 
@@ -501,17 +587,12 @@ export function bootEngine(songAt: (step: number) => Song): Promise<Engine> {
     // headless smoke test to confirm the graph is actually producing sound.
     (window as unknown as { __tone?: typeof Tone }).__tone = Tone;
     const context = Tone.getContext();
-    await registerWorklets(context.rawContext as unknown as BaseAudioContext);
+    await registerWorklets(context);
     // These run in the background. Neither is allowed to delay the first sound.
     void loadDirtIndex();
     warmOrchestralSamples();
 
-    const engine = new Engine(
-      songAt,
-      Tone.getDestination(),
-      context.rawContext as unknown as BaseAudioContext,
-      Tone.getTransport(),
-    );
+    const engine = new Engine(songAt, Tone.getDestination(), context, Tone.getTransport());
     liveEngine = engine;
     return engine;
   })();

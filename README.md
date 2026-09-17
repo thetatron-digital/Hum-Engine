@@ -15,13 +15,27 @@ npm install
 npm run dev          # development, http://localhost:5173
 npm run build        # production build into dist/
 npm run preview      # serve the production build on :4173
-npm run smoke        # headless check that audio plays and Shift works
+npm run check        # run every check below
 ```
 
-The smoke test needs the preview server running. It launches Chromium, taps
-start, measures the actual output level, presses Shift, and confirms the
-transition completes and returns. Set `CHROME_PATH` if Playwright cannot find
-a browser.
+### The checks
+
+Audio is the kind of thing that passes a build and produces silence, so these
+test the sound itself rather than the code around it. All but the first need
+the preview server running. Set `CHROME_PATH` if Playwright cannot find a
+browser.
+
+| Command | What it proves |
+| --- | --- |
+| `npm run check:vocal` | The robot voice produces a signal, its loudness moves the way speech does, and its energy lands in the formant range rather than on the carrier's fundamental. Pure maths, so it runs without a browser. |
+| `npm run smoke` | Audio actually comes out of the speakers, and a Shift transitions, holds and returns. |
+| `npm run check:pitch` | Pitch detection is accurate. Feeds the detector known tones from 110 Hz to 440 Hz as both sine and sawtooth, and fails if any is off by more than half a semitone. Currently within 2 cents. |
+| `npm run check:hum` | The whole hum flow runs: permission, worklet, count-in, recording, note view. |
+| `npm run check:export` | Renders real WAV files, reads them back, and checks the mix is not silent, that the stems are the same length as it, and that no stem is secretly a copy of the mix. |
+
+`check:pitch` exists because Chromium's synthetic microphone is a rumble at
+about 22 Hz, which the detector rightly refuses, so `check:hum` can only
+exercise the flow and not the detection.
 
 ---
 
@@ -76,6 +90,37 @@ which is a blunter approach to anti-aliasing than band-limited steps but is far
 easier to verify by ear. It falls back to a resonant filtered square if the
 browser has no AudioWorklet.
 
+**YIN for pitch detection, written here rather than pulled in.** An FFT tells
+you which frequencies are present, but a hummed note is a fundamental plus a
+stack of harmonics and the loudest bin is often a harmonic, which is where
+octave errors come from. YIN looks for the period at which the waveform repeats
+itself instead, which is much more reliable on a voice. Pitchy wraps the same
+algorithm, but writing it out means confidence and loudness arrive on the same
+message as the pitch and the thresholds can be tuned for humming rather than
+for tuning a guitar. CREPE would be more accurate on hard material and is a
+multi-megabyte download that is too slow per frame on a phone.
+
+**The robot voice is formant synthesis, not meSpeak.** The brief suggested
+meSpeak.js or the Web Speech API. The Web Speech API cannot be rendered to a
+buffer at all, only spoken aloud, which rules it out for a vocoder. meSpeak
+would work but needs three more CDN fetches and a voice data file, and the
+development container's network policy blocks CDNs, so it could not be verified
+here at all. Instead `src/vocal/speech.ts` builds the voice from scratch: a
+buzz, some noise, and three sliding resonances, which is how talking machines
+worked before recordings were involved. It reads spelling rather than
+pronunciation, so it has an accent. Given the target is a robot, that is a
+feature. If the words are ever not clear enough, the honest next step is to let
+you record your own voice through the microphone and use that as the modulator,
+which would be a real vocoder and would sound much more like the records. The
+microphone plumbing for it already exists.
+
+**The vocoder renders to a buffer instead of running live.** Following band
+envelopes in real time needs another worklet and careful tuning. Rendering
+instead means a phrase is only built when the words or the chord change, it
+plays back as an ordinary sample, and it therefore exports correctly with
+everything else for free. One version is rendered per chord in the progression,
+so the robot follows the harmony.
+
 ---
 
 ## Layout
@@ -92,20 +137,37 @@ src/
     song.ts           The Song type, defaults and migration
     store.ts          Zustand store, Shift ramp, performance recording
     presets.ts        Eleven complete starting songs
+    userPresets.ts    Presets you save yourself
   shift/
     modes.ts          Shift modes as Song -> Song, and the blend
   audio/
     voiceCatalog.ts   Every voice, described without audio code
     voices.ts         The synths and samplers themselves
     samples.ts        CDN loading, caching, graceful failure
+    worklets.ts       Module loading, around a Tone.js trap
     hardsync-processor.js   The Tear oscillator
+    pitch-processor.js      YIN pitch detection for humming
     engine.ts         Master chain, track chains, the sixteenth note loop
+  hum/
+    capture.ts        Microphone, note segmentation, cleanup, scale snapping
+  vocal/
+    dsp.ts            Pure filter maths, runnable outside a browser
+    speech.ts         Text to a robotic voice by formant synthesis
+    vocoder.ts        The voice shapes the chord. The Daft Punk sound
+    render.ts         Renders one phrase per chord into the buffer cache
+  export/
+    performance.ts    Replaying recorded knob moves and Shift presses
+    render.ts         The offline multichannel render
+    wav.ts            48 kHz 16 bit encoding and resampling
   ui/                 React, all of it presentational
+scripts/              The checks described above
 ```
 
 `music/` never imports from `audio/` or `ui/`. `audio/` never imports from
-`ui/`. That keeps the musical rules testable on their own and means the whole
-sound engine could be driven by something other than this interface.
+`ui/`. The DSP in `vocal/` works on plain arrays and imports nothing from Web
+Audio, which is precisely why it can be checked outside a browser. That keeps
+the musical rules testable on their own and means the whole sound engine could
+be driven by something other than this interface.
 
 ---
 
@@ -163,35 +225,80 @@ That matters for performing.
 
 ---
 
-## Built so far
+### Hum to melody
+
+`src/audio/pitch-processor.js` runs YIN in an AudioWorklet. The signal is
+filtered and decimated to a quarter of the sample rate first, which cuts the
+work by a factor of sixteen and loses nothing, because humming lives below
+about 1 kHz. `src/hum/capture.ts` turns the stream of readings into notes.
+
+The order of operations is the important part. Pitch is snapped to the scale
+**last**, after segmentation and cleanup. That means you can hum flat, or
+badly, or slide between notes, and still get something usable, because being in
+key is enforced rather than detected.
+
+Notes are cut where the voice stops or where the pitch jumps far enough to be a
+new note rather than a wobble, and each note's pitch is the **median** of its
+readings, not the average, because a hummed note usually slides into place and
+the median ignores the approach.
+
+Latency is corrected from what the browser reports, plus a manual trim in
+milliseconds, because the real figure on a phone varies with the route the
+audio takes and no API reports it honestly.
+
+### Export
+
+Everything comes out of a single render. Each track's output is split into its
+own pair of channels in one wide multichannel render, which is faster than
+rendering ten times and guarantees the stems line up with the mix to the
+sample. The stems are taken before the master drive, sweeps and compression, so
+they add back up to the mix.
+
+Three traps, all of which cost real time to find:
+
+1. **A silent render reports no error.** `renderToBuffers` checks the peak and
+   refuses to hand over a file that is effectively silent.
+2. **Chrome throws on any write to an offline destination's channel layout**,
+   including writing back the value it already holds. It does not need setting:
+   the context is created with the channel count already correct.
+3. **Tone's `addAudioWorkletModule` silently ignores every module after the
+   first.** The second worklet appears to load and then fails only when you
+   build a node from it. `src/audio/worklets.ts` adds modules to the underlying
+   context and keeps its own record instead.
+
+A fourth, subtler one: during an offline render the clock does not advance
+between steps, so writing the same automation point repeatedly throws. The
+engine now only writes a parameter when its value has actually moved, which
+also stops it rebuilding the reverb's impulse response sixteen times a bar.
+
+---
+
+## Build order
 
 - [x] 1. Engine boots, plays, tempo and tap tempo
 - [x] 2. Ten tracks: voice, pattern, step grid, Density, Chaos, filter, sends, Pump
 - [x] 3. Moods and progressions, melodic tracks locked to key
 - [x] 4. Shift with all five modes, blended transitions, Return
-- [x] Bonus: eleven presets, random song, song file download and upload
+- [x] 5. Hum to melody: YIN pitch detection, scale snapping, editable note view
+- [x] 6. Sample loading and chopping, with slices put in key
+- [x] 7. Vocals tier one (typed phrase through the vocoder) and tier two (vocal chops)
+- [x] 8. Export: full mix, stems, song file, and recorded performances
+- [x] 9. Eleven presets, random song, save as preset, mobile layout
+- [ ] 10. Deploy to Vercel. **Blocked:** creating a Vercel project from this
+      session is refused with `403 forbidden: You don't have permission to
+      create the project`, although reading the existing projects works. Import
+      the repo once at vercel.com/new and every push deploys itself after that.
+      Vite is detected automatically and no configuration is needed. Then turn
+      on Vercel Authentication under the project's Deployment Protection so the
+      deployment stays private.
 
-## Not built yet
+## Tier three, when it is wanted
 
-- [ ] 5. Hum to melody. Plan: YIN pitch detection in an AudioWorklet, own
-      implementation rather than Pitchy so confidence and RMS arrive on the
-      same message and the thresholds can be tuned for humming. Segment on
-      pitch stability and amplitude onsets, quantise timing to a chosen grid,
-      snap pitch to the mood. `Song` already has a `hum` pattern source and a
-      `HumNote` type, and the engine already plays them.
-- [ ] 6. Sample loading and chopping. `Engine.chopBufferKey` and the sampler
-      voice already handle slicing, reversing and pitching; what is missing is
-      the file picker and the slice editor.
-- [ ] 7. Vocals. Tier one is a typed phrase through a vocoder carried by the
-      current chord. The `vocoder` voice kind exists and currently falls back
-      to the choir. Tier three, a server-side singing API, should slot in as
-      another voice kind without touching anything else.
-- [ ] 8. Export: full mix, stems, JSON. Stems are already tappable via
-      `Engine.stemTap(id)`, and the performance event log is already recorded.
-      Known pitfall to check: verify the rendered buffer is not silent before
-      offering the download.
-- [ ] 9. Onboarding polish
-- [ ] 10. Deploy to Vercel, access restricted
+A server-side singing synthesis API was always meant to be optional. It slots
+in as another entry in `SynthKind` and another case in `buildKind`, fed by a
+renderer alongside `src/vocal/render.ts` that returns buffers into the same
+cache. Nothing else has to change, because the Vocal track already plays
+whatever buffer it is handed.
 
 ---
 

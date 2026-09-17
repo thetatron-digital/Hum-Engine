@@ -15,6 +15,8 @@ import { loadDirtIndex } from './audio/samples';
 import { TrackChips, TrackDetail } from './ui/TrackPanel';
 import { HarmonyPanel, MasterPanel, ShiftPanel, TransportBar } from './ui/Panels';
 import { SongPanel } from './ui/SongPanel';
+import { PresetStrip } from './ui/PresetStrip';
+import { ExportPanel } from './ui/ExportPanel';
 import './styles.css';
 
 /** Hands the engine whatever should be playing at a given step. */
@@ -110,12 +112,14 @@ export default function App() {
       </header>
 
       <TransportBar onPlay={play} onStop={stop} />
+      <PresetStrip />
       <ShiftPanel />
       <TrackChips />
       <TrackDetail />
       <HarmonyPanel />
       <MasterPanel />
       <SongPanel />
+      <ExportPanel />
 
       <footer className="app-foot">
         {!samplesOnline && (
