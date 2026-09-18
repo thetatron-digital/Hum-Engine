@@ -73,3 +73,28 @@ export function DepthSwitch() {
     </div>
   );
 }
+
+/** Dials or sliders. Sliders unless you ask otherwise on a touch screen. */
+export function ControlSwitch() {
+  const style = useAppStore((state) => state.controlStyle);
+  const setControlStyle = useAppStore((state) => state.setControlStyle);
+
+  return (
+    <div className="depth" role="group" aria-label="What the controls look like">
+      <button
+        type="button"
+        className={`depth-option ${style === 'slider' ? 'is-on' : ''}`}
+        onClick={() => setControlStyle('slider')}
+      >
+        Sliders
+      </button>
+      <button
+        type="button"
+        className={`depth-option ${style === 'knob' ? 'is-on' : ''}`}
+        onClick={() => setControlStyle('knob')}
+      >
+        Knobs
+      </button>
+    </div>
+  );
+}

@@ -18,7 +18,7 @@ import { TrackChips, TrackDetail } from './ui/TrackPanel';
 import { HarmonyPanel, MasterPanel, ShiftPanel, TransportBar } from './ui/Panels';
 import { SongPanel } from './ui/SongPanel';
 import { PresetStrip } from './ui/PresetStrip';
-import { DepthSwitch } from './ui/Reveal';
+import { ControlSwitch, DepthSwitch } from './ui/Reveal';
 import { ExportPanel } from './ui/ExportPanel';
 import './styles.css';
 
@@ -229,6 +229,9 @@ export default function App() {
           <DepthSwitch />
         </div>
       </header>
+      <div className="app-switches">
+        <ControlSwitch />
+      </div>
 
       {audioStalled && (
         <div className="alert">

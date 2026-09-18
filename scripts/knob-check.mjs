@@ -6,11 +6,18 @@
  * whole app is built around, so it was possible to ship a version where no
  * parameter could be changed on a phone at all.
  *
- * Three routes are tested, because a knob has to survive all three:
- *  - a real touch drag, as a thumb does it
- *  - a mouse drag, as a laptop does it
- *  - a tap opening the slider sheet, which is the route that cannot be broken
- *    by a browser disagreeing about pointer events
+ * Four routes are tested, because a control has to survive all of them:
+ *  - the plain slider, which is what a touch screen gets by default and which
+ *    has no gesture code of its own at all
+ *  - a real touch drag on a dial, as a thumb does it
+ *  - a mouse drag on a dial, as a laptop does it
+ *  - a tap on a dial, opening the sheet
+ *
+ * The dial had to be rewritten twice. It was a div carrying pointer handlers,
+ * and on a real phone it did not respond to anything, while ordinary buttons
+ * in the same app worked perfectly. So it is a real button element now, and
+ * the plain slider exists so there is always a control that depends on no
+ * gesture handling whatsoever.
  *
  * The touch input goes through the browser's own input pipeline rather than
  * synthetic events. Dispatching a pointer event by hand does not create a real
@@ -50,9 +57,41 @@ async function open(contextOptions) {
 const TEMPO = '.transport .knob-dial';
 const READOUT = '.transport .knob-value';
 
+/** Put the app into dial mode, which is not the default on a touch screen. */
+async function useDials(page) {
+  const dials = page.locator('.depth-option', { hasText: 'Knobs' });
+  if (await dials.count()) await dials.click();
+  await page.waitForTimeout(300);
+}
+
+// --- 0. the plain slider, on a touch screen, with no dials involved --------
+{
+  const { context, page } = await open({ ...devices['iPhone 13'] });
+  const slider = page.locator('.transport .slider-inline');
+  const shown = page.locator('.transport .slider-value');
+  const before = await shown.textContent();
+
+  const track = await slider.boundingBox();
+  const client = await context.newCDPSession(page);
+  const x = Math.round(track.x + track.width * 0.8);
+  const y = Math.round(track.y + track.height / 2);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await page.waitForTimeout(40);
+  await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(250);
+
+  results.plainSlider = {
+    isDefaultOnTouch: await page.locator('.depth-option.is-on', { hasText: 'Sliders' }).count() > 0,
+    before,
+    after: await shown.textContent(),
+  };
+  await context.close();
+}
+
 // --- 1. a real touch drag --------------------------------------------------
 {
   const { context, page } = await open({ ...devices['iPhone 13'] });
+  await useDials(page);
   const before = await page.locator(READOUT).textContent();
   const box = await page.locator(TEMPO).boundingBox();
   const cx = Math.round(box.x + box.width / 2);
@@ -74,6 +113,7 @@ const READOUT = '.transport .knob-value';
 // --- 2. a mouse drag -------------------------------------------------------
 {
   const { context, page } = await open({ viewport: { width: 900, height: 820 } });
+  await useDials(page);
   const before = await page.locator(READOUT).textContent();
   const box = await page.locator(TEMPO).boundingBox();
   const cx = box.x + box.width / 2;
@@ -92,6 +132,7 @@ const READOUT = '.transport .knob-value';
 // --- 3. a tap opening the slider, then moving it ---------------------------
 {
   const { context, page } = await open({ ...devices['iPhone 13'] });
+  await useDials(page);
   const before = await page.locator(READOUT).textContent();
   const box = await page.locator(TEMPO).boundingBox();
   const cx = Math.round(box.x + box.width / 2);
@@ -144,6 +185,12 @@ await browser.close();
 console.log(JSON.stringify({ results, errors: [...new Set(errors)] }, null, 2));
 
 const problems = [];
+if (!results.plainSlider.isDefaultOnTouch) {
+  problems.push('a touch screen did not get plain sliders by default');
+}
+if (results.plainSlider.before === results.plainSlider.after) {
+  problems.push(`tapping the plain slider changed nothing (still ${results.plainSlider.after})`);
+}
 if (results.touchDrag.before === results.touchDrag.after) {
   problems.push(`a touch drag changed nothing (still ${results.touchDrag.after})`);
 }
@@ -168,4 +215,6 @@ if (problems.length) {
   console.error('\nFAILED:\n  ' + problems.join('\n  '));
   process.exit(1);
 }
-console.log('\nKnobs respond to a touch drag, a mouse drag, and a tap opening the slider.');
+console.log(
+  '\nPlain sliders work on touch and are the default there, and dials respond to a touch drag, a mouse drag, and a tap.',
+);

@@ -174,7 +174,12 @@ button, select, input { font: inherit; color: inherit; }
 
 .knob-dial {
   touch-action: none;
-  cursor: grab;
+  /* A real button element, not a styled div. Some browsers are noticeably
+     more reliable about delivering taps to something natively interactive. */
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
   display: grid;
   place-items: center;
   /* Keeps the physical target at thumb size even when the dial is drawn small. */
@@ -200,7 +205,17 @@ button, select, input { font: inherit; color: inherit; }
 .knob-cap { fill: var(--panel-2); stroke: #2c3446; stroke-width: 1; }
 .knob-pointer { stroke-width: 2.5; stroke-linecap: round; }
 
-.knob-value { font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.knob-value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
 .knob-label .info-trigger { font-size: 11px; }
 
 /* --- Pickers and buttons ------------------------------------------------ */
@@ -877,3 +892,37 @@ button, select, input { font: inherit; color: inherit; }
 }
 
 .app-head-right { display: flex; align-items: center; gap: 10px; }
+
+/* --- Plain sliders, the default on a touch screen ----------------------- */
+
+.slider-control {
+  /* Wide enough that the track is worth dragging, so these stack one per row
+     on a phone rather than squeezing several across. */
+  grid-column: 1 / -1;
+  padding: 2px 0 6px;
+}
+.slider-control.is-disabled { opacity: 0.4; }
+
+.slider-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.slider-value {
+  border: none;
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  min-height: 32px;
+  padding: 0 6px;
+}
+
+.slider-inline { height: 44px; width: 100%; display: block; }
+.slider-inline::-webkit-slider-thumb { width: 28px; height: 28px; margin-top: -10px; }
+.slider-inline::-moz-range-thumb { width: 28px; height: 28px; }
+
+.app-switches { display: flex; justify-content: flex-end; }

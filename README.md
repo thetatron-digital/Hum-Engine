@@ -356,13 +356,26 @@ you just heard comes after it.
 
 ## Two hard-won notes on touch
 
-**A knob needs a second way in.** Dragging a dial is a poor primary control on
-a phone: small target, gesture competing with the page scroll, and the pointer
-handling that makes it work is exactly the part browsers disagree about. Knobs
-did not respond to touch at all on a real device. So a tap now opens a sheet
-with a **native range input**, which every phone has spent years getting
-right and which no gesture code of ours can break. Drag is still there; the
-two are told apart by whether the finger moved more than six pixels.
+**A dial is the wrong control for a phone, and it took two attempts to accept
+that.** Knobs did not respond to touch at all on a real device, while ordinary
+buttons in the same app worked perfectly. The first fix reworked the gesture
+handling and still did not work there, which was the answer: the problem was
+not which events were being listened for, it was that the whole interaction
+rested on gesture code at all.
+
+So there are now two presentations of the same control, chosen by
+`controlStyle` in the store:
+
+- **Sliders**, the default on anything with a coarse pointer. A native range
+  input, full width, with the label and value above it. No gesture code
+  whatsoever; the browser owns the entire interaction.
+- **Dials**, the default with a mouse. The dial is a real `<button>` rather
+  than a styled div, so a tap is an ordinary click that opens a sheet with a
+  slider in it, and dragging is a bonus on top rather than the only way in.
+
+The lesson worth keeping: when something works for buttons and not for your
+custom control, stop debugging the custom control and use the element that
+already works.
 
 Three specific traps, all found the hard way:
 

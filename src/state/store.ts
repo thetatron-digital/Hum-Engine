@@ -16,6 +16,7 @@ import { applyShift, blendSongs } from '../shift/modes';
 
 const STORAGE_KEY = 'hum-engine:song:v1';
 const SIMPLE_KEY = 'hum-engine:simple';
+const CONTROL_KEY = 'hum-engine:controls';
 
 /** A single recorded move, timed in sixteenth notes from the start of recording. */
 export interface PerformanceEvent {
@@ -66,6 +67,16 @@ interface AppState {
    * song file to somebody else's screen.
    */
   simple: boolean;
+  /**
+   * Dials or plain sliders.
+   *
+   * Dials look the part and are miserable on a touch screen: small target, a
+   * gesture that competes with scrolling the page, and it all rests on pointer
+   * handling that browsers disagree about. Sliders are a native control the
+   * phone already handles, so they are the default on anything with a
+   * touchscreen. Anyone who prefers dials can have them back.
+   */
+  controlStyle: 'knob' | 'slider';
 
   recording: boolean;
   recordStartStep: number;
@@ -89,6 +100,7 @@ interface AppState {
   selectTrack: (id: TrackId) => void;
   toggleNoteNames: () => void;
   setSimple: (simple: boolean) => void;
+  setControlStyle: (style: 'knob' | 'slider') => void;
   startRecording: () => void;
   stopRecording: () => void;
   clearPerformance: () => void;
@@ -136,6 +148,26 @@ function loadSimple(): boolean {
   }
 }
 
+/**
+ * Sliders on a touch screen, dials on a mouse, until told otherwise.
+ *
+ * A coarse pointer means a finger. Fingers and dials do not get on.
+ */
+function loadControlStyle(): 'knob' | 'slider' {
+  try {
+    const saved = localStorage.getItem(CONTROL_KEY);
+    if (saved === 'knob' || saved === 'slider') return saved;
+  } catch {
+    // Fall through to working it out from the device.
+  }
+  try {
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+    return coarse || navigator.maxTouchPoints > 0 ? 'slider' : 'knob';
+  } catch {
+    return 'slider';
+  }
+}
+
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 function saveLater(song: Song): void {
   clearTimeout(saveTimer);
@@ -158,6 +190,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedTrack: 'kick',
   showNoteNames: false,
   simple: loadSimple(),
+  controlStyle: loadControlStyle(),
   recording: false,
   recordStartStep: 0,
   performance: [],
@@ -244,6 +277,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Not worth interrupting anything over.
     }
     set({ simple });
+  },
+
+  setControlStyle: (controlStyle) => {
+    try {
+      localStorage.setItem(CONTROL_KEY, controlStyle);
+    } catch {
+      // Not worth interrupting anything over.
+    }
+    set({ controlStyle });
   },
 
   startRecording: () =>

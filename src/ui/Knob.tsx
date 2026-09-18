@@ -26,6 +26,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { InfoLabel } from './Tooltip';
+import { useAppStore } from '../state/store';
 
 interface KnobProps {
   label: string;
@@ -60,7 +61,66 @@ function arcPath(cx: number, cy: number, radius: number, fromDeg: number, toDeg:
   return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${large} 1 ${end.x} ${end.y}`;
 }
 
-export function Knob({
+export function Knob(props: KnobProps) {
+  const controlStyle = useAppStore((state) => state.controlStyle);
+  return controlStyle === 'slider' ? <SliderControl {...props} /> : <Dial {...props} />;
+}
+
+/**
+ * The plain version: a label, a number, and a native range input.
+ *
+ * No gesture code at all. The browser owns the whole interaction, including
+ * dragging from anywhere along the track and the accessibility behaviour, and
+ * there is nothing here that a browser could disagree with. It is the default
+ * on anything with a touchscreen for exactly that reason.
+ */
+function SliderControl({
+  label,
+  tip,
+  value,
+  onChange,
+  defaultValue,
+  min = 0,
+  max = 1,
+  format,
+  accent = 'var(--accent)',
+  disabled = false,
+}: KnobProps) {
+  const span = max - min;
+  const show = format ?? ((current: number) => `${Math.round(((current - min) / span) * 100)}%`);
+  const step = span > 40 ? 1 : span / 100;
+
+  return (
+    <div className={`slider-control ${disabled ? 'is-disabled' : ''}`}>
+      <div className="slider-head">
+        <InfoLabel text={label} tip={tip} />
+        <button
+          type="button"
+          className="slider-value"
+          style={{ color: accent }}
+          onClick={() => defaultValue !== undefined && onChange(defaultValue)}
+          title={defaultValue === undefined ? undefined : 'Tap to put this back to its usual setting'}
+        >
+          {show(value)}
+        </button>
+      </div>
+      <input
+        className="value-range slider-inline"
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        disabled={disabled}
+        aria-label={label}
+        style={{ ['--accent-track' as string]: accent }}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </div>
+  );
+}
+
+function Dial({
   label,
   tip,
   value,
@@ -77,6 +137,7 @@ export function Knob({
   const [sheetOpen, setSheetOpen] = useState(false);
   const drag = useRef<{ x: number; y: number; from: number; moved: boolean } | null>(null);
   const detach = useRef<(() => void) | null>(null);
+  const justDragged = useRef(false);
 
   const span = max - min;
   const normalised = Math.max(0, Math.min(1, (value - min) / span));
@@ -106,8 +167,10 @@ export function Knob({
     detach.current?.();
     detach.current = null;
     setDragging(false);
-    // A press that never moved is a tap, and a tap asks for the slider.
-    if (active && !active.moved) setSheetOpen(true);
+    // A press that moved was a drag, and the click that follows it should be
+    // ignored. A press that did not move is a tap, and the button's own click
+    // handler will open the sheet.
+    if (active?.moved) justDragged.current = true;
   }, []);
 
   const begin = useCallback(
@@ -154,9 +217,19 @@ export function Knob({
 
   return (
     <div className={`knob ${disabled ? 'is-disabled' : ''} ${dragging ? 'is-dragging' : ''}`}>
-      <div
+      <button
+        type="button"
         className="knob-dial"
         style={{ width: size, height: size }}
+        // A drag has already changed the value, so the click that follows it
+        // must not also open the sheet.
+        onClick={() => {
+          if (justDragged.current) {
+            justDragged.current = false;
+            return;
+          }
+          setSheetOpen(true);
+        }}
         onPointerDown={(event) => begin(event.clientX, event.clientY)}
         // A fallback for browsers whose pointer events misbehave on touch.
         // Beginning twice is harmless: the second call sees a drag already in
@@ -165,13 +238,8 @@ export function Knob({
           const touch = event.touches[0];
           if (touch) begin(touch.clientX, touch.clientY);
         }}
-        role="slider"
-        tabIndex={disabled ? -1 : 0}
-        aria-label={label}
-        aria-valuemin={min}
-        aria-valuemax={max}
-        aria-valuenow={Number(value.toFixed(3))}
-        aria-valuetext={show(value)}
+        disabled={disabled}
+        aria-label={`${label}, ${show(value)}`}
         onKeyDown={(event) => {
           if (disabled) return;
           const stepSize = span / 40;
@@ -180,9 +248,6 @@ export function Knob({
             event.preventDefault();
           } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
             onChange(Math.max(min, value - stepSize));
-            event.preventDefault();
-          } else if (event.key === 'Enter' || event.key === ' ') {
-            setSheetOpen(true);
             event.preventDefault();
           }
         }}
@@ -199,8 +264,12 @@ export function Knob({
           <circle cx={centre} cy={centre} r={radius * 0.62} className="knob-cap" />
           <line x1={inner.x} y1={inner.y} x2={pointer.x} y2={pointer.y} className="knob-pointer" style={{ stroke: accent }} />
         </svg>
-      </div>
-      <div className="knob-value">{show(value)}</div>
+      </button>
+      {/* A second target for the same sheet, because the number is the part
+          people aim at when they want to type an exact value. */}
+      <button type="button" className="knob-value" onClick={() => setSheetOpen(true)}>
+        {show(value)}
+      </button>
       <InfoLabel text={label} tip={tip} className="knob-label" />
 
       {sheetOpen && (

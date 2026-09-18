@@ -33,7 +33,9 @@ await page.waitForTimeout(1000);
 
 const survey = () =>
   page.evaluate(() => ({
-    knobs: document.querySelectorAll('.knob').length,
+    // Either presentation counts: a touch screen gets plain sliders, a mouse
+    // gets dials, and both are the same control underneath.
+    knobs: document.querySelectorAll('.knob, .slider-control').length,
     pickers: document.querySelectorAll('.picker').length,
     folds: document.querySelectorAll('.reveal-toggle').length,
     pageHeight: document.documentElement.scrollHeight,
